@@ -74,6 +74,23 @@ class CommandProcessorTest {
         assertThat(terminal.reasonCode()).isEqualTo("ACTION_NOT_SUPPORTED_BY_DEVICE");
     }
 
+    @Test
+    void stopClearsAnExistingBatteryPowerOverrideAndIsIdempotent() {
+        processor.handle(command("bess-001", "SET_POWER", Map.of("active_power_kw", 40.0)), fleet);
+        CommandRequest stop = command("bess-001", "STOP", Map.of());
+
+        List<CommandAck> first = processor.handle(stop, fleet);
+        List<CommandAck> replay = processor.handle(stop, fleet);
+
+        assertThat(first).extracting(CommandAck::status)
+                .containsExactly(CommandAck.Status.ACCEPTED, CommandAck.Status.EXECUTING,
+                        CommandAck.Status.SUCCEEDED);
+        assertThat(first.getLast().actual()).containsEntry("active_power_kw", 0);
+        assertThat(replay).containsExactly(first.getLast());
+        assertThat(fleet.get("bess-001").snapshot().activePowerKw()).isZero();
+        assertThat(processor.executionCount()).isEqualTo(2);
+    }
+
     private static CommandRequest command(String deviceId, String action, Map<String, Object> parameters) {
         UUID commandId = UUID.randomUUID();
         return new CommandRequest("vpp.command.requested", 1, commandId,

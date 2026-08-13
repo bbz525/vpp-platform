@@ -14,12 +14,16 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.server.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import io.vpp.platformapi.command.CommandAckConsumer;
+import io.vpp.platformapi.command.CommandDispatcher;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -28,12 +32,17 @@ import tools.jackson.databind.ObjectMapper;
         "spring.datasource.url=jdbc:tc:postgresql:17.6-alpine:///vpp",
         "spring.datasource.username=test",
         "spring.datasource.password=test"
+        ,"platform.commands.dispatcher-enabled=true",
+        "platform.commands.poll-interval=1h",
+        "platform.commands.timeout-interval=1h"
 })
 class ScheduleApiIntegrationTest {
     private static final UUID TENANT = UUID.fromString("7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941");
     @Autowired ServletWebServerApplicationContext context;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
+    @Autowired CommandAckConsumer commandAcks;
+    @Autowired CommandDispatcher commandDispatcher;
     private final HttpClient http = HttpClient.newHttpClient();
 
     @Test
@@ -74,6 +83,59 @@ class ScheduleApiIntegrationTest {
                 Integer.class, TENANT)).isEqualTo(2);
     }
 
+    @Test
+    void approvalCreatesPersistentCommandsAndLateAckCannotReverseTimeout() throws Exception {
+        Fixture fixture=fixture();
+        JsonNode schedule=send("POST","/api/v1/schedules","create-t10-"+fixture.portfolio(),request(fixture,"50"),202);
+        UUID scheduleId=UUID.fromString(schedule.path("schedule").path("id").asText());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM command WHERE schedule_id=?",Integer.class,scheduleId)).isZero();
+        String decision="{\"decision\":\"APPROVE\",\"reason\":\"operator safety review complete\"}";
+        JsonNode approved=send("POST","/api/v1/schedules/"+scheduleId+"/decisions","approve-t10-"+scheduleId,decision,200);
+        JsonNode replay=send("POST","/api/v1/schedules/"+scheduleId+"/decisions","approve-t10-"+scheduleId,decision,200);
+        assertThat(replay.path("id").asText()).isEqualTo(approved.path("id").asText());
+        assertThat(replay.path("command_count").asInt()).isEqualTo(approved.path("command_count").asInt());
+        assertThat(approved.path("command_count").asInt()).isEqualTo(97);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM command WHERE schedule_id=? AND action='SET_POWER'",Integer.class,scheduleId)).isEqualTo(96);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM command WHERE schedule_id=? AND action='STOP' AND parameters_json->>'reason'='SCHEDULE_END'",Integer.class,scheduleId)).isEqualTo(1);
+        assertThatThrownBy(()->jdbc.update("UPDATE schedule_approval SET reason='tamper' WHERE schedule_id=?",scheduleId)).hasMessageContaining("append-only");
+
+        JsonNode firstPage=send("GET","/api/v1/commands?schedule_id="+scheduleId+"&offset=0&limit=7",null,null,200);
+        JsonNode secondPage=send("GET","/api/v1/commands?schedule_id="+scheduleId+"&offset=7&limit=7",null,null,200);
+        assertThat(firstPage.size()).isEqualTo(7);assertThat(secondPage.size()).isEqualTo(7);
+        Set<String> firstIds=new HashSet<>();firstPage.forEach(node->firstIds.add(node.path("id").asText()));
+        secondPage.forEach(node->assertThat(firstIds).doesNotContain(node.path("id").asText()));
+        Set<String> reconstructed=new HashSet<>();
+        for(int offset=0;offset<97;offset+=13){JsonNode page=send("GET","/api/v1/schedules/"+scheduleId+"/execution?offset="+offset+"&limit=13",null,null,200);assertThat(page.path("command_total").asInt()).isEqualTo(97);assertThat(page.path("command_offset").asInt()).isEqualTo(offset);assertThat(page.path("command_limit").asInt()).isEqualTo(13);page.path("commands").forEach(node->assertThat(reconstructed.add(node.path("command").path("id").asText())).isTrue());}
+        assertThat(reconstructed).hasSize(97);
+        assertThat(jdbc.queryForObject("SELECT before_digest<>after_digest FROM audit_event WHERE object_type='SCHEDULE' AND object_id=? AND action='SCHEDULE_APPROVED'",Boolean.class,scheduleId.toString())).isTrue();
+
+        UUID command=jdbc.queryForObject("SELECT id FROM command WHERE schedule_id=? AND action='SET_POWER' ORDER BY not_before LIMIT 1",UUID.class,scheduleId);
+        String commandKey=jdbc.queryForObject("SELECT idempotency_key FROM command WHERE id=?",String.class,command);
+        jdbc.update("UPDATE command SET status='DISPATCHED',not_before=now()-interval '2 seconds',expires_at=now()-interval '1 second' WHERE id=?",command);
+        jdbc.update("INSERT INTO command_attempt(id,tenant_id,command_id,attempt_no,dispatched_at) VALUES (?,?,?,?,now())",UUID.randomUUID(),TENANT,command,1);
+        commandDispatcher.timeout();
+        assertThat(jdbc.queryForObject("SELECT status FROM command WHERE id=?",String.class,command)).isEqualTo("TIMED_OUT");
+        UUID event=UUID.randomUUID();
+        String ack="""
+                {"schema_version":1,"event_id":"%s","command_id":"%s","idempotency_key":"%s",
+                 "device_time":"%s","status":"SUCCEEDED","actual":{"active_power_kw":1}}
+                """.formatted(event,command,commandKey,Instant.now());
+        commandAcks.process(TENANT+":"+"battery-"+fixture.suffix(),ack.getBytes(StandardCharsets.UTF_8));
+        commandAcks.process(TENANT+":"+"battery-"+fixture.suffix(),ack.getBytes(StandardCharsets.UTF_8));
+        assertThat(jdbc.queryForObject("SELECT status FROM command WHERE id=?",String.class,command)).isEqualTo("TIMED_OUT");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM command_event WHERE command_id=? AND reported_status='SUCCEEDED' AND applied=false",Integer.class,command)).isEqualTo(1);
+
+        UUID future=jdbc.queryForObject("SELECT id FROM command WHERE schedule_id=? AND action='SET_POWER' AND status='CREATED' ORDER BY not_before DESC LIMIT 1",UUID.class,scheduleId);
+        JsonNode stopped=send("POST","/api/v1/commands/"+future+"/stop","emergency-stop-"+future,
+                "{\"reason\":\"operator emergency stop\"}",200);
+        assertThat(stopped.path("command").path("action").asText()).isEqualTo("STOP");
+        assertThat(jdbc.queryForObject("SELECT status FROM schedule WHERE id=?",String.class,scheduleId)).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM command WHERE schedule_id=? AND action='SET_POWER' AND status='CREATED'",Integer.class,scheduleId)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM command_event e JOIN command c ON c.id=e.command_id WHERE c.schedule_id=? AND e.reported_status='CANCELLED'",Integer.class,scheduleId)).isPositive();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE object_type='SCHEDULE' AND object_id=? AND action='SCHEDULE_EMERGENCY_STOPPED'",Integer.class,scheduleId.toString())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT before_digest<>after_digest FROM audit_event WHERE object_type='SCHEDULE' AND object_id=? AND action='SCHEDULE_EMERGENCY_STOPPED'",Boolean.class,scheduleId.toString())).isTrue();
+    }
+
     private Fixture fixture() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         UUID portfolio = UUID.randomUUID(); UUID site = UUID.randomUUID(); UUID model = UUID.randomUUID();
@@ -104,7 +166,7 @@ class ScheduleApiIntegrationTest {
                 TENANT, tariff, Timestamp.from(start), Timestamp.from(noon));
         jdbc.update("INSERT INTO tariff_interval(tenant_id,tariff_plan_id,interval_start,interval_end,price_per_kwh) VALUES (?,?,?,?,1.00)",
                 TENANT, tariff, Timestamp.from(noon), Timestamp.from(end));
-        return new Fixture(portfolio, battery, loadVersion, pvVersion, tariff, day);
+        return new Fixture(portfolio, battery, loadVersion, pvVersion, tariff, day, suffix);
     }
 
     private void capability(UUID battery, String name, String unit, String min, String max, String fallback) {
@@ -150,5 +212,5 @@ class ScheduleApiIntegrationTest {
     }
 
     private record Fixture(UUID portfolio, UUID battery, UUID loadVersion, UUID pvVersion,
-            UUID tariff, LocalDate day) {}
+            UUID tariff, LocalDate day, String suffix) {}
 }

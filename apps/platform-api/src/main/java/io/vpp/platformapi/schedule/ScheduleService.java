@@ -24,6 +24,7 @@ import io.vpp.platformapi.audit.AuditOutboxWriter;
 import io.vpp.platformapi.common.ApiException;
 import io.vpp.platformapi.common.IdempotencyService;
 import io.vpp.platformapi.config.ScheduleProperties;
+import io.vpp.platformapi.config.CommandProperties;
 import io.vpp.platformapi.forecast.ForecastRepository;
 import io.vpp.platformapi.security.ActorPrincipal;
 import tools.jackson.databind.JsonNode;
@@ -38,16 +39,18 @@ public class ScheduleService {
     private final RuleBaselineOptimizer optimizer;
     private final ScheduleConstraintValidator validator;
     private final ScheduleProperties properties;
+    private final CommandProperties commandProperties;
     private final IdempotencyService idempotency;
     private final AuditOutboxWriter audit;
     private final ObjectMapper mapper;
 
     public ScheduleService(ScheduleRepository repository, ForecastRepository forecasts,
             RuleBaselineOptimizer optimizer, ScheduleConstraintValidator validator,
-            ScheduleProperties properties, IdempotencyService idempotency,
+            ScheduleProperties properties, CommandProperties commandProperties, IdempotencyService idempotency,
             AuditOutboxWriter audit, ObjectMapper mapper) {
         this.repository = repository; this.forecasts = forecasts; this.optimizer = optimizer;
-        this.validator = validator; this.properties = properties; this.idempotency = idempotency;
+        this.validator = validator; this.properties = properties; this.commandProperties = commandProperties;
+        this.idempotency = idempotency;
         this.audit = audit; this.mapper = mapper;
     }
 
@@ -102,6 +105,46 @@ public class ScheduleService {
 
     public List<ScheduleResponse> list(UUID tenantId, UUID portfolioId, int limit) {
         return repository.list(tenantId, portfolioId, limit);
+    }
+
+    @Transactional
+    public ScheduleDecisionResponse decide(ActorPrincipal actor, UUID scheduleId, String key,
+            ScheduleDecisionRequest request) {
+        var replay = idempotency.replay(actor.tenantId(), "DECIDE_SCHEDULE", key,
+                Map.of("schedule_id", scheduleId, "request", request));
+        if (replay.isPresent()) return repository.findDecision(actor.tenantId(), replay.get())
+                .orElseThrow(() -> ApiException.notFound("schedule decision"));
+        if (request.reason() == null || request.reason().isBlank()) {
+            throw ApiException.validation("reason is required for every schedule decision");
+        }
+        ScheduleRepository.DecisionContext context = repository.lockDecision(actor.tenantId(), scheduleId)
+                .orElseThrow(() -> ApiException.notFound("schedule"));
+        if (!"VALIDATED".equals(context.status()) || !"FEASIBLE".equals(context.feasibility())
+                || context.currentVersion() == null || context.currentVersion() != context.version()) {
+            throw ApiException.conflict("only the current VALIDATED and FEASIBLE schedule version can be decided");
+        }
+        ScheduleDetailResponse before = get(actor.tenantId(), scheduleId);
+        UUID decisionId = UUID.randomUUID();
+        Instant decidedAt = Instant.now();
+        repository.insertDecision(decisionId, actor.tenantId(), context, request, actor.subject(), key, decidedAt);
+        int commandCount = 0;
+        if ("APPROVE".equals(request.decision())) {
+            repository.markSchedule(actor.tenantId(), scheduleId, "APPROVED");
+            commandCount = repository.createCommands(actor.tenantId(), context, decidedAt,
+                    commandProperties.ackTimeout());
+            repository.approvalOutbox(actor.tenantId(), context, actor.subject(), decidedAt);
+        } else {
+            repository.markSchedule(actor.tenantId(), scheduleId, "CANCELLED");
+            repository.rejectionOutbox(actor.tenantId(), context, actor.subject(), request.reason(), decidedAt);
+        }
+        idempotency.remember(actor.tenantId(), "DECIDE_SCHEDULE", key,
+                Map.of("schedule_id", scheduleId, "request", request), decisionId);
+        ScheduleDecisionResponse response = new ScheduleDecisionResponse(decisionId, scheduleId,
+                context.versionId(), context.version(), request.decision(), request.reason(), actor.subject(),
+                decidedAt, commandCount);
+        audit.succeeded(actor, "APPROVE".equals(request.decision()) ? "SCHEDULE_APPROVED" : "SCHEDULE_REJECTED",
+                "SCHEDULE", scheduleId, request.reason(), before, get(actor.tenantId(), scheduleId));
+        return response;
     }
 
     private Context context(UUID tenantId, CreateScheduleRequest request) {

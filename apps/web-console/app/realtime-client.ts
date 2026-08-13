@@ -1,4 +1,4 @@
-import type { Alarm, AlarmCoverage, AlarmDetail, DeviceResource, ForecastRun, ForecastRunDetail, Portfolio, PortfolioSnapshot, ScheduleDetail, ScheduleRecord, SiteResource, TariffPlan, TelemetryQuery } from "./realtime-types";
+import type { Alarm, AlarmCoverage, AlarmDetail, CommandDetail, DeviceResource, ForecastRun, ForecastRunDetail, Portfolio, PortfolioSnapshot, ScheduleDecision, ScheduleDecisionType, ScheduleDetail, ScheduleExecution, ScheduleRecord, SiteResource, TariffPlan, TelemetryQuery } from "./realtime-types";
 
 const apiBase = process.env.NEXT_PUBLIC_PLATFORM_API_BASE ?? "http://127.0.0.1:8080";
 const tenant = process.env.NEXT_PUBLIC_VPP_TENANT_ID ?? "7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941";
@@ -13,13 +13,13 @@ function headers(): HeadersInit {
 
 async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, { headers: headers(), signal, cache: "no-store" });
-  if (!response.ok) throw new Error(await errorMessage(response));
+  if (!response.ok) throw new ApiError(response.status, await errorMessage(response));
   return response.json() as Promise<T>;
 }
 
 async function post<T>(path: string, body: object, idempotencyKey?: string): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, { method: "POST", headers: { ...headers(), "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: JSON.stringify(body) });
-  if (!response.ok) throw new Error(await errorMessage(response));
+  if (!response.ok) throw new ApiError(response.status, await errorMessage(response));
   return response.json() as Promise<T>;
 }
 
@@ -73,6 +73,16 @@ export function getSchedule(id: string, signal?: AbortSignal) { return get<Sched
 export function createSchedule(input: { portfolio_id: string; schedule_date: string; load_forecast_version_id: string; pv_forecast_version_id: string; tariff_plan_id: string; battery_states: { device_id: string; initial_soc_pct: number }[]; }) {
   return post<ScheduleDetail>("/api/v1/schedules", input, `schedule-${input.portfolio_id}-${input.schedule_date}-${crypto.randomUUID()}`);
 }
+export function decideSchedule(id: string, decision: ScheduleDecisionType, reason: string) {
+  return post<ScheduleDecision>(`/api/v1/schedules/${id}/decisions`, { decision, reason }, `schedule-decision-${id}-${crypto.randomUUID()}`);
+}
+export function emergencyStopScheduleFromCommand(id: string, reason: string) {
+  return post<CommandDetail>(`/api/v1/commands/${id}/stop`, { reason }, `command-stop-${id}-${crypto.randomUUID()}`);
+}
+export function getScheduleExecution(id: string, offset: number, limit: number, signal?: AbortSignal) {
+  const query = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+  return get<ScheduleExecution>(`/api/v1/schedules/${id}/execution?${query}`, signal);
+}
 
 export function websocketUrl(ticket: string): string {
   const url = new URL(apiBase);
@@ -88,5 +98,12 @@ async function errorMessage(response: Response): Promise<string> {
     return body.message ?? `请求失败 (${response.status})`;
   } catch {
     return `请求失败 (${response.status})`;
+  }
+}
+
+export class ApiError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
   }
 }

@@ -93,6 +93,7 @@ for (const requiredPath of ["/health", "/portfolios", "/sites", "/device-models"
   "/devices/{deviceId}/status", "/devices/{deviceId}/credentials", "/tariff-plans",
   "/audit-events", "/internal/device-identities", "/forecast-runs", "/forecast-runs/{forecastRunId}",
   "/forecasts/{forecastVersionId}", "/forecasts/{forecastVersionId}/overrides", "/schedules", "/schedules/{scheduleId}",
+  "/schedules/{scheduleId}/decisions", "/schedules/{scheduleId}/execution", "/commands", "/commands/{commandId}/stop",
   "/internal/device-catalog", "/portfolios/{portfolioId}/snapshot", "/telemetry/query",
   "/realtime/tickets",
   "/alarm-rules", "/alarms", "/alarms/coverage", "/alarms/{alarmId}",

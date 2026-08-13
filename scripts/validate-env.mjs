@@ -89,6 +89,15 @@ if (process.env.PLATFORM_REALTIME_ENABLED === "true") {
 if (process.env.PLATFORM_OUTBOX_ENABLED === "true" && process.env.KAFKA_SECURITY_PROTOCOL === "PLAINTEXT") {
   gatewayFailures.push("KAFKA_SECURITY_PROTOCOL must be encrypted when platform outbox relay is enabled");
 }
+if (process.env.PLATFORM_COMMAND_DISPATCHER_ENABLED === "true" && process.env.PLATFORM_OUTBOX_ENABLED !== "true") {
+  gatewayFailures.push("PLATFORM_OUTBOX_ENABLED must be true when the command dispatcher is enabled");
+}
+if (process.env.PLATFORM_COMMAND_DISPATCHER_ENABLED === "true" && process.env.IOT_GATEWAY_COMMANDS_ENABLED !== "true") {
+  gatewayFailures.push("IOT_GATEWAY_COMMANDS_ENABLED must be true when the command dispatcher is enabled");
+}
+if (process.env.PLATFORM_COMMAND_CONSUMER_ENABLED === "true" && process.env.KAFKA_SECURITY_PROTOCOL === "PLAINTEXT") {
+  gatewayFailures.push("KAFKA_SECURITY_PROTOCOL must be encrypted when the command acknowledgement consumer is enabled");
+}
 if (process.env.PLATFORM_FORECAST_ENABLED === "true") {
   if (!(process.env.FORECAST_SERVICE_URL?.startsWith("https://"))) {
     gatewayFailures.push("FORECAST_SERVICE_URL must use https when platform forecast is enabled");

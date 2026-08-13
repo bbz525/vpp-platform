@@ -32,19 +32,30 @@
 | --- | --- | --- |
 | `forecast_run` | `id`, tenant/target/metric, `status`, data cutoff, model version, quality JSON | 一次预测任务 |
 | `forecast_version` | `id`, `forecast_run_id`, `version`, source, overridden_by/reason | 原始与人工修正版本 |
-| `schedule` | `id`, tenant/portfolio, local date/timezone, terminal status/feasibility, current version, input JSON/reasons | T09 候选计划身份或不可行事实 |
+| `schedule` | `id`, tenant/portfolio, local date/timezone, status/feasibility, current version, input JSON/reasons | T09 候选计划身份；V6 状态允许 `VALIDATED`、`FAILED`、`APPROVED`、`CANCELLED` |
 | `schedule_version` | `id`, `schedule_id`, version, input refs, algorithm, status, summary JSON, content hash | 不可变版本 |
 | `schedule_interval` | version, interval, load/PV/price, baseline/planned grid and costs | unique `(version, interval_start)` |
 | `schedule_target` | version, device, interval, charge/discharge/setpoint and SOC start/end | unique `(version, device, interval_start)` |
 | `device_config_snapshot` | tenant/portfolio, canonical JSON, SHA-256, captured at | 生成时能力、站点限值和初始 SOC 的不可变证据 |
-| `schedule_approval` | schedule version, actor, decision, reason, timestamp | 审批事实 |
-| `command` | `id`, tenant/device/schedule, idempotency key, action, status, deadlines | unique `(tenant_id, idempotency_key)` |
-| `command_attempt` | `id`, `command_id`, attempt no, dispatch/ack/error timestamps | unique `(command_id, attempt_no)` |
+| `schedule_approval` | `id`, tenant/schedule/version, `APPROVE|REJECT`, actor, reason, idempotency key, decided at | V6 每个租户计划只有一个不可变终局决定；幂等键租户内唯一 |
+| `command` | `id`, tenant/device/schedule/version/parent, idempotency key, action/parameters, safety config version, status/deadlines/terminal, reason/message/actual, lock version | unique `(tenant_id, idempotency_key)`；请求参数和设备 actual 分列 |
+| `command_attempt` | `id`, tenant/command, attempt no, dispatch/latest ack/error | unique `(command_id, attempt_no)`；每次物理发送独立追加 |
+| `command_event` | `id`, tenant/command/source event, event/from/reported status, applied, reason/message/actual, occurred/received at | 回执与平台转换时间线；`source_event_id` 租户内去重并由触发器禁止更新/删除 |
 | `demand_response_event` | identity, target, interval, baseline method/version, status | 响应生命周期 |
 | `dr_allocation` | DR event, site/device, committed kW, schedule ref | 分解结果 |
 | `evaluation` | object type/id, baseline ref, status, metrics JSON, data quality | 结果事实，不覆盖计划 |
 
-### 2.3 告警、审计与集成
+### 2.3 V6 审批与命令事实约束
+
+Flyway `V6__schedule_approval_and_commands.sql` 已把 T10 控制面事实加入 PostgreSQL：
+
+- `schedule_approval` 通过 `(tenant_id, schedule_id)` 唯一约束保证当前 MVP 每个计划只有一个终局决定，通过 `(tenant_id, idempotency_key)` 稳定重放同一写请求；更新和删除由 `schedule_approval_append_only` 拒绝。
+- 普通 `SET_POWER` 与独立动作类型 `STOP` 共用 `command` 状态机。`parameters_json` 只保存请求目标，`actual_json` 只保存匹配回执声明；`parent_command_id` 关联人工紧急停止生成的逐设备 STOP 与原控制命令，计划末尾 STOP 则直接关联计划版本。对计划内命令调用 STOP 是计划级动作：未来 `CREATED SET_POWER` 被取消、每台参与设备各有 STOP，计划进入 `CANCELLED`；只有无计划关联命令才生成单设备 STOP。
+- `not_before`、`expires_at` 与非终态索引支持数据库恢复扫描；`terminal_at`、`last_reason_code`、`last_message` 保留 canonical 结果。`safety_config_version` 固定下发时所依据的设备配置版本。
+- `command_attempt` 保存每次实际下发；`command_event` 保存是否应用的状态声明，`occurred_at` 与 `received_at` 分离，且更新/删除由 `command_event_append_only` 拒绝。`processed_event` 以 `(consumer, event_id)` 作为消费幂等门禁。
+- V6 的复合外键把 schedule、version、device、parent command 固定在同一 tenant；`expires_at > not_before` 由数据库检查。自动退避重试、独立 STOP 权限、站点级对象授权和命令 WebSocket 投影仍属于应用层后续强化，不能从这些表或索引推断为已实现。
+
+### 2.4 告警、审计与集成
 
 | 表 | 关键字段 | 说明 |
 | --- | --- | --- |
@@ -266,3 +277,4 @@ Redis Cluster 下 `{tenant}` hash tag 可保证相关键槽位，但大租户可
 3. 切换读取前记录 Kafka 起止 offset 和校验报告；失败时回到旧投影，不删除旧表。
 4. ClickHouse 大规模 backfill 分分区执行并限流，避免影响在线插入。
 5. 任何破坏性迁移必须有恢复路径；MVP 阶段禁止把手工 SQL 当作唯一部署步骤。
+6. V6 是向前扩展迁移：先放宽 `schedule.status`，再创建审批、命令、attempt、事件和消费去重表；回滚应用前必须停止新审批/命令创建并接管非终态命令，不能通过删除 V6 事实清队列。

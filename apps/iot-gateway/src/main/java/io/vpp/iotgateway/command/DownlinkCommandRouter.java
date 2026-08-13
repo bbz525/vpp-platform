@@ -55,6 +55,9 @@ public class DownlinkCommandRouter {
         byte[] payload = record.value();
         try {
             ValidatedCommand command = validator.validateCommandRequest(payload);
+            if (!command.identity().kafkaKey().equals(record.key())) {
+                throw new IllegalArgumentException("COMMAND_IDENTITY_MISMATCH");
+            }
             if (!authorizer.isAuthorized(command.identity())) {
                 throw new IllegalArgumentException("UNAUTHORIZED_DEVICE");
             }

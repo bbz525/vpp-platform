@@ -31,6 +31,8 @@ flowchart LR
 - [实时控制台 UI 契约](docs/08-realtime-ui-contract.md)
 - [告警中心契约](docs/09-alarm-center-contract.md)
 - [日前预测中心契约](docs/10-forecast-center-contract.md)
+- [审批、指令执行与审计契约](docs/11-command-execution-contract.md)
+- [阶段进展报告（T00–T09）](docs/12-stage-progress.md)
 
 ## Phase 0 快速开始
 
@@ -46,7 +48,7 @@ make infra-up
 
 详细的基础设施说明见 [infra/README.md](infra/README.md)，契约演进规则见 [contracts/README.md](contracts/README.md)。
 
-当前进度：T00、T02、T03、T04、T05、T06、T07 已达到 `runtime_verified`，T01 已达到 `contract_verified`；T08 日前预测与 T09 优化调度已通过算法、契约、PostgreSQL 集成和 UI 构建验证。T09 只生成经硬约束复核的候选计划，审批与下发由 T10 承接。运行说明见 [Platform API](apps/platform-api/README.md)、[Web Console](apps/web-console/README.md)、[设备模拟器](apps/device-simulator/README.md)、[IoT Gateway](apps/iot-gateway/README.md) 与 [Stream Processor](apps/stream-processor/README.md)。
+当前进度：T00、T02、T03、T04、T05、T06、T07 已达到 `runtime_verified`，T01 已达到 `contract_verified`；T08 日前预测与 T09 优化调度已达到 `integration_verified`（算法、契约、PostgreSQL 集成和 UI 构建验证通过，浏览器实链路验证待历史数据集/运行时验收）。T10 当前为 `integration_verified`：审批、持久化命令、数据库扫描下发/超时、回执时间线、计划末尾 STOP、计划级紧急停止、可分页重建完整事实链的 REST 执行查询和 Web 交互已通过 Java、契约、基础设施配置与 Web 构建/测试门禁；尚未运行真实 Compose 下发→设备回执→重启恢复闭环和在线浏览器 E2E，因此不是 `runtime_verified`/`product_verified`。独立 STOP 权限、自动重试、命令 WebSocket 推送和站点级授权属于后续强化。运行说明见 [Platform API](apps/platform-api/README.md)、[Web Console](apps/web-console/README.md)、[设备模拟器](apps/device-simulator/README.md)、[IoT Gateway](apps/iot-gateway/README.md) 与 [Stream Processor](apps/stream-processor/README.md)。
 
 ## 默认技术基线
 

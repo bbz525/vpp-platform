@@ -90,6 +90,14 @@ platform:
   schedule:
     soc-safety-margin-pct: ${SCHEDULE_SOC_SAFETY_MARGIN_PCT:5}
     degradation-cost-per-kwh: ${SCHEDULE_DEGRADATION_COST_PER_KWH:0.05}
+  commands:
+    dispatcher-enabled: ${PLATFORM_COMMAND_DISPATCHER_ENABLED:false}
+    consumer-enabled: ${PLATFORM_COMMAND_CONSUMER_ENABLED:false}
+    poll-interval: ${PLATFORM_COMMAND_POLL_INTERVAL:1s}
+    timeout-interval: ${PLATFORM_COMMAND_TIMEOUT_INTERVAL:1s}
+    ack-timeout: ${PLATFORM_COMMAND_ACK_TIMEOUT:20s}
+    stop-timeout: ${PLATFORM_STOP_COMMAND_TIMEOUT:20s}
+    batch-size: ${PLATFORM_COMMAND_BATCH_SIZE:100}
   outbox:
     enabled: ${PLATFORM_OUTBOX_ENABLED:false}
     poll-interval: ${PLATFORM_OUTBOX_POLL_INTERVAL:1s}

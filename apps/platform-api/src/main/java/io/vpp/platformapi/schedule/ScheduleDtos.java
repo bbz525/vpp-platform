@@ -11,6 +11,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import tools.jackson.databind.JsonNode;
 
@@ -66,5 +68,18 @@ public final class ScheduleDtos {
             @JsonProperty("created_at") Instant createdAt, List<ScheduleIntervalResponse> intervals,
             List<ScheduleTargetResponse> targets) {}
 
-    public record ScheduleDetailResponse(ScheduleResponse schedule, ScheduleVersionResponse version) {}
+    public record ScheduleDetailResponse(ScheduleResponse schedule, ScheduleVersionResponse version,
+            @JsonProperty("latest_decision") ScheduleDecisionResponse latestDecision) {}
+
+    public record ScheduleDecisionRequest(
+            @NotNull @Pattern(regexp = "APPROVE|REJECT") String decision,
+            @NotBlank @Size(max = 500) String reason) {}
+
+    public record ScheduleDecisionResponse(UUID id,
+            @JsonProperty("schedule_id") UUID scheduleId,
+            @JsonProperty("schedule_version_id") UUID scheduleVersionId,
+            @JsonProperty("schedule_version") int scheduleVersion,
+            String decision, String reason, @JsonProperty("actor_id") String actorId,
+            @JsonProperty("decided_at") Instant decidedAt,
+            @JsonProperty("command_count") int commandCount) {}
 }

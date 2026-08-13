@@ -232,7 +232,9 @@ AUTH payload：
 
 ### ScheduleApproved
 
-必须包含 `schedule_id`、`schedule_version`、`portfolio_id`、时间范围、`forecast_version`、`tariff_version`、`device_config_snapshot_id`、`algorithm_version`、`approved_by`、`approved_at`、计划摘要哈希。
+`schema_version=2` 必须包含 `schedule_id`、`schedule_version`、`portfolio_id`、时间范围、独立的 `load_forecast_version_id` 与 `pv_forecast_version_id`、`tariff_plan_id`、`device_config_snapshot_id`、`algorithm_version`、`approved_by`、`approved_at`、计划摘要哈希。v1 的单一 `forecast_version` 仅为已发布兼容契约，T10 生产者不得再用它表示双预测输入。
+
+该事件是不可变审批事实，不代表任何设备已经收到或执行命令。设备执行结果只能来自 `CommandAck`；没有回执时不得推断成功。
 
 ### ScheduleGenerated
 

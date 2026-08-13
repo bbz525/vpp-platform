@@ -18,6 +18,7 @@ tags:
   - name: Snapshots
   - name: Forecasts
   - name: Schedules
+  - name: Commands
 paths:
   /alarm-rules:
     get:
@@ -563,6 +564,122 @@ paths:
               schema:
                 $ref: "#/components/schemas/ScheduleDetail"
         "404": { $ref: "#/components/responses/NotFound" }
+  /schedules/{scheduleId}/decisions:
+    post:
+      operationId: decideSchedule
+      tags: [Schedules]
+      summary: Append an approval or rejection decision for the current schedule version
+      description: Only a tenant-scoped VALIDATED and FEASIBLE current version can be decided. Approval materializes persisted future commands; rejection materializes none.
+      parameters:
+        - $ref: "#/components/parameters/ScheduleId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduleDecisionRequest" }
+      responses:
+        "200":
+          description: Immutable decision recorded; command_count is the number reported by the service for this decision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleDecision" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /schedules/{scheduleId}/execution:
+    get:
+      operationId: getScheduleExecution
+      tags: [Commands]
+      summary: Get the persisted decision, command timelines and audit facts for a schedule
+      description: Returns one command page of REST execution evidence. command_total, command_offset and command_limit describe the page; clients must request subsequent offsets and merge commands and audit events by identifier to reconstruct the complete schedule chain instead of treating the first page as complete. A null decision and command_total zero truthfully represent a schedule that has not produced execution commands.
+      parameters:
+        - $ref: "#/components/parameters/ScheduleId"
+        - name: offset
+          in: query
+          required: false
+          description: Zero-based command offset within the schedule execution chain.
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: limit
+          in: query
+          required: false
+          description: Maximum command details returned in this page.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: Tenant-scoped execution evidence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleExecution" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /commands:
+    get:
+      operationId: listCommands
+      tags: [Commands]
+      summary: List tenant-scoped persisted commands
+      description: Optionally filters by schedule_id and returns one ordered page with target parameters separate from device-reported actual values. A client that needs the complete current list must increment offset and continue until a page contains fewer than limit items; it must not treat the default first 100 items as the full schedule.
+      parameters:
+        - name: schedule_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: offset
+          in: query
+          required: false
+          description: Zero-based offset in creation-time and identifier order.
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: Commands ordered by creation time and identifier
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Command" }
+  /commands/{commandId}:
+    get:
+      operationId: getCommand
+      tags: [Commands]
+      summary: Get one command with attempts and immutable event timeline
+      description: Returns the tenant-scoped canonical command together with every recorded dispatch attempt and applied or unapplied status event.
+      parameters:
+        - $ref: "#/components/parameters/CommandId"
+      responses:
+        "200":
+          description: Tenant-scoped command detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommandDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /commands/{commandId}/stop:
+    post:
+      operationId: stopCommand
+      tags: [Commands]
+      summary: Request a schedule-level emergency stop anchored to an existing command
+      description: For a scheduled non-terminal SET_POWER command, cancels every future CREATED SET_POWER in that schedule, creates one STOP per participating device, and changes the schedule to CANCELLED; the response is the STOP linked to the selected device. For a command without a schedule, creates one device STOP. Submission does not mean that any device has stopped.
+      parameters:
+        - $ref: "#/components/parameters/CommandId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StopCommandRequest" }
+      responses:
+        "200":
+          description: Schedule-level emergency STOP command created or replayed idempotently
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommandDetail" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
 components:
   securitySchemes:
     bearerAuth:
@@ -592,6 +709,11 @@ components:
       schema: { type: string, format: uuid }
     ScheduleId:
       name: scheduleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CommandId:
+      name: commandId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -1155,6 +1277,142 @@ components:
             properties:
               device_id: { type: string, format: uuid }
               initial_soc_pct: { type: number, minimum: 0, maximum: 100 }
+    ScheduleDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [decision, reason]
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Non-blank decision rationale required for both APPROVE and REJECT.
+    ScheduleDecision:
+      type: object
+      additionalProperties: false
+      required: [id, schedule_id, schedule_version_id, schedule_version, decision, reason, actor_id, decided_at, command_count]
+      properties:
+        id: { type: string, format: uuid }
+        schedule_id: { type: string, format: uuid }
+        schedule_version_id: { type: string, format: uuid }
+        schedule_version: { type: integer, minimum: 1 }
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        actor_id: { type: string }
+        decided_at: { type: string, format: date-time }
+        command_count:
+          type: integer
+          minimum: 0
+          description: Total commands materialized for the schedule, including SCHEDULE_END STOP commands; zero for rejection.
+    StopCommandRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Non-blank operator reason recorded with the schedule-level emergency stop or, for an unscheduled command, the device STOP.
+    Command:
+      type: object
+      additionalProperties: false
+      required: [id, device_id, schedule_id, schedule_version_id, parent_command_id, idempotency_key, action, parameters, status, not_before, expires_at, terminal_at, last_reason_code, last_message, actual, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+        schedule_id: { type: [string, "null"], format: uuid }
+        schedule_version_id: { type: [string, "null"], format: uuid }
+        parent_command_id: { type: [string, "null"], format: uuid }
+        idempotency_key: { type: string, maxLength: 256 }
+        action: { type: string, enum: [SET_POWER, STOP] }
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Requested target parameters; never a device-reported actual value.
+        status: { type: string, enum: [CREATED, DISPATCHED, ACCEPTED, EXECUTING, SUCCEEDED, FAILED, TIMED_OUT, CANCELLED] }
+        not_before: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        terminal_at: { type: [string, "null"], format: date-time }
+        last_reason_code: { type: [string, "null"], maxLength: 80 }
+        last_message: { type: [string, "null"], maxLength: 500 }
+        actual:
+          type: [object, "null"]
+          additionalProperties: true
+          description: Device-reported actual object when present; never backfilled from parameters.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CommandAttempt:
+      type: object
+      additionalProperties: false
+      required: [attempt_no, dispatched_at, latest_ack_at, latest_ack_status, error_code]
+      properties:
+        attempt_no: { type: integer, minimum: 1 }
+        dispatched_at: { type: string, format: date-time }
+        latest_ack_at: { type: [string, "null"], format: date-time }
+        latest_ack_status: { type: [string, "null"] }
+        error_code: { type: [string, "null"], maxLength: 80 }
+    CommandEvent:
+      type: object
+      additionalProperties: false
+      required: [id, source_event_id, event_type, from_status, reported_status, applied, reason_code, message, actual, occurred_at, received_at]
+      properties:
+        id: { type: string, format: uuid }
+        source_event_id: { type: [string, "null"], format: uuid }
+        event_type: { type: string }
+        from_status:
+          type: [string, "null"]
+          enum: [CREATED, DISPATCHED, ACCEPTED, EXECUTING, SUCCEEDED, FAILED, TIMED_OUT, CANCELLED, null]
+        reported_status: { type: string }
+        applied: { type: boolean }
+        reason_code: { type: [string, "null"], maxLength: 80 }
+        message: { type: [string, "null"], maxLength: 500 }
+        actual:
+          type: [object, "null"]
+          additionalProperties: true
+        occurred_at: { type: string, format: date-time }
+        received_at: { type: string, format: date-time }
+    CommandDetail:
+      type: object
+      additionalProperties: false
+      required: [command, attempts, events]
+      properties:
+        command: { $ref: "#/components/schemas/Command" }
+        attempts: { type: array, items: { $ref: "#/components/schemas/CommandAttempt" } }
+        events: { type: array, items: { $ref: "#/components/schemas/CommandEvent" } }
+    ScheduleExecution:
+      type: object
+      additionalProperties: false
+      required: [schedule_id, command_total, command_offset, command_limit, decision, commands, audit]
+      properties:
+        schedule_id: { type: string, format: uuid }
+        command_total:
+          type: integer
+          minimum: 0
+          description: Total commands currently persisted for the schedule across all pages.
+        command_offset:
+          type: integer
+          minimum: 0
+          description: Zero-based command offset applied to this response.
+        command_limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          description: Requested maximum number of command details in this response.
+        decision:
+          oneOf:
+            - $ref: "#/components/schemas/ScheduleDecision"
+            - type: "null"
+        commands:
+          type: array
+          maxItems: 500
+          description: Command details for this page only.
+          items: { $ref: "#/components/schemas/CommandDetail" }
+        audit:
+          type: array
+          description: Schedule audit plus audit facts for commands in this page; merge pages by audit event id for a complete deduplicated chain.
+          items: { $ref: "#/components/schemas/AuditEvent" }
     Schedule:
       type: object
       additionalProperties: false
@@ -1163,7 +1421,7 @@ components:
         id: { type: string, format: uuid }
         status:
           type: string
-          enum: [VALIDATED, FAILED]
+          enum: [VALIDATED, FAILED, APPROVED, CANCELLED]
         feasibility: { type: string, enum: [FEASIBLE, INFEASIBLE, FAILED] }
         portfolio_id: { type: string, format: uuid }
         schedule_date: { type: string, format: date }
@@ -1177,12 +1435,16 @@ components:
     ScheduleDetail:
       type: object
       additionalProperties: false
-      required: [schedule, version]
+      required: [schedule, version, latest_decision]
       properties:
         schedule: { $ref: "#/components/schemas/Schedule" }
         version:
           type: [object, "null"]
           additionalProperties: true
+        latest_decision:
+          oneOf:
+            - $ref: "#/components/schemas/ScheduleDecision"
+            - type: "null"
     ApiError:
       type: object
       additionalProperties: false

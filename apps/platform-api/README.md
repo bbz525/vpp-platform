@@ -1,16 +1,35 @@
 # Platform API
 
-## T09 optimization schedule
+## T09/T10 调度审批与命令执行
 
 `POST /api/v1/schedules` freezes a portfolio load forecast version, PV forecast version, tariff plan,
 battery configuration snapshot, and operator-supplied initial SOC values. The deterministic
 `RULE_BASELINE 1.0.0` optimizer returns either a hard-constraint-validated immutable version or an
 explicit infeasible result without a version. `GET /api/v1/schedules` and `GET /api/v1/schedules/{id}`
-expose the audit-ready outcome. Approval and dispatch are intentionally deferred to T10.
+expose the audit-ready outcome.
 
 Battery capability conventions are `SET_POWER` (`kW`, negative min charge / positive max discharge),
 `ENERGY_CAPACITY_KWH` (`kWh`, fallback is rated capacity), `SOC_RANGE_PCT` (`%`), and
 `CHARGE_EFFICIENCY` / `DISCHARGE_EFFICIENCY` (`ratio`, fallback in `(0,1]`).
+
+T10 已提供以下租户级 REST 控制主路径：
+
+- `POST /api/v1/schedules/{scheduleId}/decisions` 以必填非空原因追加 `APPROVE` 或 `REJECT` 决定。批准只接受当前 `VALIDATED + FEASIBLE` 版本并持久化未来 `SET_POWER` 与计划末尾 `SCHEDULE_END` STOP；响应的 `command_count` 统计全部命令（包含末尾 STOP），拒绝返回 0 且不生成命令。
+- `GET /api/v1/commands?schedule_id=...&offset=0&limit=100` 分页返回命令 canonical 状态，请求 `parameters` 与设备回执 `actual` 严格分列；调用方应递增 `offset` 直到返回数小于 `limit`，不能把默认前 100 条当作全量。
+- `GET /api/v1/schedules/{scheduleId}/execution?offset=0&limit=100` 返回决定及一页命令的 attempts/events 与相关审计事实；`command_total`、`command_offset`、`command_limit` 明确分页范围。审计/运营客户端必须翻页并按 command/audit ID 去重合并，才能按 `schedule_id` 重建完整执行链。
+- `POST /api/v1/commands/{commandId}/stop` 以非终态 `SET_POWER` 为锚点发起计划级紧急停止：取消同计划全部未来 `CREATED SET_POWER`，为每台参与设备创建 STOP，并把计划改为 `CANCELLED`；响应是所选设备 STOP 的 `command + attempts + events`。无 `schedule_id` 的命令才只创建单设备 STOP。请求成功只表示控制面停止事实和 STOP 已持久化，不表示任何设备已经停止。
+- Dispatcher 从 PostgreSQL 领取到期命令，写入 attempt 与 Outbox 后推进为 `DISPATCHED`；回执消费者只接受匹配身份和幂等键的明确状态。超时后迟到成功会保留在事件时间线，但不把 canonical `TIMED_OUT` 改成成功。
+
+启用真实下行链路时需同时配置：
+
+```bash
+PLATFORM_COMMAND_DISPATCHER_ENABLED=true \
+PLATFORM_COMMAND_CONSUMER_ENABLED=true \
+PLATFORM_OUTBOX_ENABLED=true \
+IOT_GATEWAY_COMMANDS_ENABLED=true
+```
+
+当前边界是 REST 查询/刷新和租户级 `TENANT_ADMIN`/`OPERATOR` 写权限。独立 STOP 权限、自动重试、命令 WebSocket 推送、站点级对象授权仍是后续强化，不应据此 README 或数据库表推断为已实现。
 
 `platform-api` 是资源与设备身份控制面的事实源。T04 已实现资源、身份、资费与审计；T06 增加授权实时出口；T07 增加告警；T08 增加日前预测编排和不可变版本。
 
@@ -86,7 +105,7 @@ UI 状态和字段事实源见 `docs/08-realtime-ui-contract.md`。
 
 ## 数据一致性
 
-Flyway migration `V1__control_plane.sql` 创建租户资源、资费、审计、Outbox 与幂等表。每次资源变更的业务写入、审计事件和 Outbox 在同一 PostgreSQL 事务中提交；数据库触发器禁止修改或删除审计记录。资费区间同时由服务校验和 PostgreSQL 排斥约束防止重叠。
+Flyway migration `V1__control_plane.sql` 创建租户资源、资费、审计、Outbox 与幂等表，V6 增加不可变审批事实、持久化命令、下发 attempt、回执/状态事件和消费去重。每次资源变更的业务写入、审计事件和 Outbox 在同一 PostgreSQL 事务中提交；数据库触发器禁止修改或删除审计、审批和命令事件。资费区间同时由服务校验和 PostgreSQL 排斥约束防止重叠。
 
 ## 生产门禁
 

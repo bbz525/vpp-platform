@@ -47,4 +47,11 @@ public class ScheduleController {
         return service.get(actors.require(Role.TENANT_ADMIN, Role.OPERATOR, Role.AUDITOR,
                 Role.SITE_ADMIN).tenantId(), id);
     }
+
+    @PostMapping("/{id}/decisions")
+    public ScheduleDecisionResponse decide(@PathVariable UUID id,
+            @RequestHeader("Idempotency-Key") @Size(min = 8, max = 200) String key,
+            @Valid @RequestBody ScheduleDecisionRequest request) {
+        return service.decide(actors.require(Role.TENANT_ADMIN, Role.OPERATOR), id, key, request);
+    }
 }

@@ -98,10 +98,11 @@ DR Event 表达外部或内部响应目标；Evaluation 使用基线、计划和
 **不变量：**
 
 - 每个版本引用不可变的预测、电价、设备配置和算法版本。
-- 只有 `VALIDATED` 计划可审批；只有 `APPROVED` 计划可激活。
+- 只有状态为 `VALIDATED`、可行性为 `FEASIBLE` 且存在 `current_version` 的计划可审批；审批对象必须是提交时的当前版本，只有 `APPROVED` 计划可激活。
 - 同一组合和时间范围最多一个 ACTIVE 计划，替代必须显式取消旧版本。
 - 硬约束不满足时只能返回不可行结果，不能生成可审批计划。
 - 人工变更生成新版本并重新校验，不修改已审批版本。
+- 批准/拒绝是版本级追加事实且不可覆盖；拒绝不生成普通设备指令，同一版本继续处理必须产生新版本。
 
 状态机：
 
@@ -129,6 +130,9 @@ stateDiagram-v2
 - 终态不可回退；迟到回执保留但不能把 SUCCEEDED 改为 EXECUTING。
 - 重试创建 CommandAttempt，不创建语义重复的 Command。
 - 只有明确支持的设备能力可以生成对应动作。
+- 只有匹配设备的明确成功回执可使命令进入 `SUCCEEDED`；计划目标、消息已发布和无回执均不得表示为成功或实际值。
+- `STOP` 是独立高优先级命令；停止请求、计划取消与设备确认停止是不同事实。
+- 每台设备最后一个非零计划设定值必须伴随持久化的计划末尾 `STOP` 或经验证的等价本地到期安全事实；执行窗口结束不能代替设备停止回执。
 
 ```mermaid
 stateDiagram-v2
@@ -139,11 +143,16 @@ stateDiagram-v2
     ACCEPTED --> SUCCEEDED
     EXECUTING --> SUCCEEDED
     CREATED --> CANCELLED
+    CREATED --> TIMED_OUT
     DISPATCHED --> TIMED_OUT
     ACCEPTED --> TIMED_OUT
+    EXECUTING --> TIMED_OUT
     DISPATCHED --> FAILED
     ACCEPTED --> FAILED
     EXECUTING --> FAILED
+    DISPATCHED --> CANCELLED
+    ACCEPTED --> CANCELLED
+    EXECUTING --> CANCELLED
 ```
 
 ### 3.5 Alarm 聚合
@@ -198,4 +207,3 @@ stateDiagram-v2
 - `EvaluationCompleted`, `AuditEventAppended`
 
 事件名表达已发生事实。命令使用祈使语义并走独立命令主题，不能混在事实事件中。
-

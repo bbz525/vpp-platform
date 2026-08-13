@@ -30,6 +30,16 @@ public class AuditOutboxWriter {
 
     public void succeeded(ActorPrincipal actor, String action, String objectType, UUID objectId,
             String reason, Object before, Object after) {
+        write(actor.tenantId(), "USER", actor.subject(), action, objectType, objectId, reason, before, after);
+    }
+
+    public void systemSucceeded(UUID tenantId, String actorId, String action, String objectType,
+            UUID objectId, String reason, Object before, Object after) {
+        write(tenantId, "SYSTEM", actorId, action, objectType, objectId, reason, before, after);
+    }
+
+    private void write(UUID tenantId, String actorType, String actorId, String action, String objectType,
+            UUID objectId, String reason, Object before, Object after) {
         UUID auditId = UUID.randomUUID();
         Instant occurredAt = clock.instant();
         String beforeDigest = before == null ? null : digests.digest(before);
@@ -38,15 +48,15 @@ public class AuditOutboxWriter {
                 INSERT INTO audit_event
                     (id, tenant_id, actor_type, actor_id, action, object_type, object_id,
                      reason, before_digest, after_digest, result, metadata_json, occurred_at)
-                VALUES (?, ?, 'USER', ?, ?, ?, ?, ?, ?, ?, 'SUCCEEDED', '{}'::jsonb, ?)
-                """, auditId, actor.tenantId(), actor.subject(), action, objectType,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUCCEEDED', '{}'::jsonb, ?)
+                """, auditId, tenantId, actorType, actorId, action, objectType,
                 objectId.toString(), reason, beforeDigest, afterDigest, Timestamp.from(occurredAt));
         Map<String, Object> event = Map.of(
                 "schema", "vpp.audit.event",
                 "schema_version", 1,
                 "event_id", auditId,
-                "tenant_id", actor.tenantId(),
-                "actor_id", actor.subject(),
+                "tenant_id", tenantId,
+                "actor_id", actorId,
                 "action", action,
                 "object_type", objectType,
                 "object_id", objectId,
@@ -56,8 +66,8 @@ public class AuditOutboxWriter {
                 INSERT INTO outbox_event
                     (id, tenant_id, aggregate_type, aggregate_id, topic, message_key, payload_json)
                 VALUES (?, ?, 'AUDIT_EVENT', ?, 'vpp.audit.events.v1', ?, ?::jsonb)
-                """, UUID.randomUUID(), actor.tenantId(), auditId.toString(),
-                actor.tenantId() + ":" + objectId, json(event));
+                """, UUID.randomUUID(), tenantId, auditId.toString(),
+                tenantId + ":" + objectId, json(event));
     }
 
     private String json(Object value) {

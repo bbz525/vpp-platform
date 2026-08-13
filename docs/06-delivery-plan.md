@@ -4,7 +4,9 @@
 
 采用纵向切片：每个阶段都形成可演示、可验证的业务增量。只有共享契约稳定后才并行开发，集成和最终验收由架构负责人统一负责。
 
-进度标签：`planned → implemented → unit_verified → contract_verified → runtime_verified → product_verified`。构建成功不等于产品闭环完成。
+进度标签：`planned → implemented → unit_verified → contract_verified → integration_verified → runtime_verified → product_verified`。构建成功不等于产品闭环完成。
+
+- `integration_verified`：单元、契约、数据库集成（Testcontainers）与 UI 构建验证通过，但完整运行时/浏览器实链路验证未完成（2026-08-13 起用于 T08/T09/T10）。
 
 ## 2. 角色分工
 
@@ -164,6 +166,7 @@ flowchart LR
 
 ### T08：日前预测服务
 
+- **状态：** `integration_verified`（2026-08-13）
 - **负责人：** AI/数据工程
 - **目标：** 生成版本化的次日负荷/光伏预测和可信质量/误差报告。
 - **范围/文件：** `services/forecast-service`、Platform API forecast 编排、预测 UI。
@@ -177,8 +180,7 @@ flowchart LR
 
 ### T09：优化调度内核
 
-**状态：已完成（2026-08-13）**
-
+- **状态：** `integration_verified`（2026-08-13）
 - **负责人：** Java 后端 + 能源算法
 - **目标：** 从版本化输入生成满足硬约束的候选计划，并提供规则基线对照。
 - **范围/文件：** Platform API schedule/optimization 模块。
@@ -193,6 +195,7 @@ flowchart LR
 
 ### T10：审批、指令与完整审计
 
+- **状态：** `integration_verified`（2026-08-13；真实运行时与产品验收尚未完成）
 - **负责人：** Java 后端 + 前端 UI
 - **目标：** 形成“计划比较 → 校验 → 审批 → 下发 → 回执 → 超时/停止 → 审计”闭环。
 - **范围/文件：** schedule/command/audit 模块、Dispatcher、Gateway 下行、调度与执行页面。
@@ -202,6 +205,9 @@ flowchart LR
 - **验证：** 跨服务 Testcontainers E2E；kill/restart recovery；超时和迟到回执；权限与审计不可静默修改测试。
 - **依赖：** T03、T06、T09。
 - **禁止触碰：** 不使用单进程临时定时器作为唯一调度事实；不在回执未知时标记成功。
+- **已实现切片：** 当前版本在 V6 PostgreSQL 事实源上实现当前可行版本的不可变批准/拒绝（两种决定原因均必填）、批准时物化 `SET_POWER` 和计划末尾 `SCHEDULE_END` STOP、数据库扫描下发/超时、幂等且终态不回退的回执处理、按 `schedule_id` 分页查询并重建命令/attempt/event/审计完整链，以及以非终态 `SET_POWER` 为锚点、取消同计划全部未来 `CREATED SET_POWER`、为每台参与设备创建 STOP 并把计划改为 `CANCELLED` 的计划级紧急停止；无计划关联命令才走单设备 STOP。批准响应的 `command_count` 包含末尾 STOP；执行响应通过 `command_total`、`command_offset`、`command_limit` 防止默认 100 条被误当成全量，Web 已按最终 Java DTO 接入审批、分页执行查询和 STOP 交互。
+- **验证证据：** Java 模块共 64 项测试通过（Platform API 15、IoT Gateway 26、Stream Processor 7、Device Simulator 16）；Gateway 的 26 项包含 Kafka key/payload 身份绑定安全回归，集成测试覆盖 V1–V6 PostgreSQL 以及 Redis/ClickHouse Testcontainers。OpenAPI/AsyncAPI lint 与契约测试通过，覆盖 15 个 schema、14 个有效 fixture、4 个反例和 T10 必需 REST path；Compose config 与环境校验通过；Web typecheck、6 项 Node 测试、Next.js 生产构建和 diff-check 通过。以上支持 `integration_verified`；尚未执行真实 Compose 下发→设备回执→服务重启恢复闭环和在线浏览器 E2E，因此不得标记为 `runtime_verified` 或 `product_verified`。
+- **后续强化：** 独立 STOP 权限（当前复用 `TENANT_ADMIN`/`OPERATOR`）、未确认阶段有界自动重试、WebSocket 命令推送与 resume、站点级对象授权均未实现；严重告警/动态配置重校验和完整 STOP 覆盖也需单独集成验收。
 
 ### T11：需求响应与效果评估
 
@@ -264,5 +270,6 @@ flowchart LR
 | T07 告警中心 | `runtime_verified`（本地 Compose + 浏览器） |
 | T08 日前预测服务 | `integration_verified`（算法、API、契约、UI 构建） |
 | T09 优化调度内核 | `integration_verified`（算法、硬约束、API、契约、PostgreSQL、UI 构建） |
-| T10–T12 实现 | `planned` |
+| T10 审批与命令执行 | `integration_verified`（Java/契约/基础设施配置/Web 构建与测试；真实运行时闭环待验收） |
+| T11–T12 实现 | `planned` |
 | 产品闭环验证 | 未开始 |

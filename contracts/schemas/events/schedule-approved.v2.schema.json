@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/events/schedule-approved.v2.schema.json",
+  "title": "Schedule approved event v2",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version", "event_id", "event_type", "tenant_id", "schedule_id", "schedule_version",
+    "portfolio_id", "interval_start", "interval_end", "load_forecast_version_id",
+    "pv_forecast_version_id", "tariff_plan_id", "device_config_snapshot_id",
+    "algorithm_version", "approved_by", "approved_at", "content_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "ScheduleApproved" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "schedule_id": { "type": "string", "format": "uuid" },
+    "schedule_version": { "type": "integer", "minimum": 1 },
+    "portfolio_id": { "type": "string", "format": "uuid" },
+    "interval_start": { "type": "string", "format": "date-time" },
+    "interval_end": { "type": "string", "format": "date-time" },
+    "load_forecast_version_id": { "type": "string", "format": "uuid" },
+    "pv_forecast_version_id": { "type": "string", "format": "uuid" },
+    "tariff_plan_id": { "type": "string", "format": "uuid" },
+    "device_config_snapshot_id": { "type": "string", "format": "uuid" },
+    "algorithm_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "approved_by": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "approved_at": { "type": "string", "format": "date-time" },
+    "content_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

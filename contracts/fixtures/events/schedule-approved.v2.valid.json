@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "event_id": "0198c8d7-c8dc-7ae2-a3a1-eef5c6eddb91",
+  "event_type": "ScheduleApproved",
+  "tenant_id": "7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941",
+  "schedule_id": "77cc6bb5-8c12-41fa-a3ea-3b767560b9ef",
+  "schedule_version": 3,
+  "portfolio_id": "e48fe403-bb5d-4eb4-815f-92d27550c743",
+  "interval_start": "2026-08-13T00:00:00.000Z",
+  "interval_end": "2026-08-14T00:00:00.000Z",
+  "load_forecast_version_id": "fe9743c4-e455-4f66-a267-f2db33f75cf2",
+  "pv_forecast_version_id": "8fe94b2e-04a5-48da-a050-b98aedfb61f4",
+  "tariff_plan_id": "5076caea-2b7f-422b-8ac7-30f8895fac2b",
+  "device_config_snapshot_id": "c9b2184e-a92f-4a51-a8e8-a7de66e1a5dd",
+  "algorithm_version": "RULE_BASELINE-1.0.0",
+  "approved_by": "local-operator",
+  "approved_at": "2026-08-12T10:02:00.000Z",
+  "content_sha256": "16c5473390eb16c5473390eb16c5473390eb16c5473390eb16c5473390eb16c5"
+}

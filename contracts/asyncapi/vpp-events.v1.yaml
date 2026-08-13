@@ -79,6 +79,7 @@ channels:
     messages:
       scheduleGenerated: { $ref: "#/components/messages/scheduleGenerated" }
       scheduleApproved: { $ref: "#/components/messages/scheduleApproved" }
+      scheduleApprovedV2: { $ref: "#/components/messages/scheduleApprovedV2" }
   forecastEventsKafka:
     address: vpp.forecast.events.v1
     servers: [$ref: "#/servers/kafkaLocal"]
@@ -138,6 +139,10 @@ operations:
     action: send
     channel: { $ref: "#/channels/scheduleEventsKafka" }
     messages: [$ref: "#/channels/scheduleEventsKafka/messages/scheduleApproved"]
+  publishScheduleApprovedV2:
+    action: send
+    channel: { $ref: "#/channels/scheduleEventsKafka" }
+    messages: [$ref: "#/channels/scheduleEventsKafka/messages/scheduleApprovedV2"]
   publishScheduleGenerated:
     action: send
     channel: { $ref: "#/channels/scheduleEventsKafka" }
@@ -219,6 +224,12 @@ components:
       contentType: application/json
       payload:
         $ref: ../schemas/events/schedule-approved.v1.schema.json
+    scheduleApprovedV2:
+      name: ScheduleApprovedV2
+      title: Immutable approved schedule fact with independently frozen load and PV forecasts
+      contentType: application/json
+      payload:
+        $ref: ../schemas/events/schedule-approved.v2.schema.json
     scheduleGenerated:
       name: ScheduleGeneratedV1
       title: Terminal schedule generation and feasibility fact

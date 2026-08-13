@@ -120,6 +120,51 @@ export interface TariffPlan { id: string; name: string; currency: string; timezo
 export interface ScheduleSummary { baselineCost: number; plannedEnergyCost: number; degradationCost: number; objectiveCost: number; savings: number; baselinePeakKw: number; plannedPeakKw: number; throughputKwh: number; equivalentCycles: number; }
 export interface ScheduleInterval { interval_start: string; interval_end: string; load_kw: number; pv_kw: number; price_per_kwh: number; baseline_grid_kw: number; planned_grid_kw: number; baseline_cost: number; planned_cost: number; }
 export interface ScheduleTarget { device_id: string; interval_start: string; interval_end: string; charge_kw: number; discharge_kw: number; setpoint_kw: number; soc_start_pct: number; soc_end_pct: number; }
-export interface ScheduleRecord { id: string; portfolio_id: string; schedule_date: string; timezone: string; status: "VALIDATED" | "FAILED"; feasibility: "FEASIBLE" | "INFEASIBLE"; current_version: number | null; failure_code: string | null; reasons: string[]; input: Record<string, unknown>; created_at: string; updated_at: string; }
+export type ScheduleDecisionType = "APPROVE" | "REJECT";
+export interface ScheduleDecision {
+  id: string; schedule_id: string; schedule_version_id: string; schedule_version: number;
+  decision: ScheduleDecisionType; reason: string; actor_id: string | null;
+  decided_at: string; command_count: number;
+}
+export interface ScheduleRecord {
+  id: string; portfolio_id: string; schedule_date: string; timezone: string;
+  status: "VALIDATED" | "FAILED" | string; feasibility: "FEASIBLE" | "INFEASIBLE" | string;
+  current_version: number | null; failure_code: string | null; reasons: string[];
+  input: Record<string, unknown>;
+  created_at: string; updated_at: string;
+}
 export interface ScheduleVersion { id: string; version: number; load_forecast_version_id: string; pv_forecast_version_id: string; tariff_plan_id: string; device_config_snapshot_id: string; algorithm_name: "RULE_BASELINE"; algorithm_version: string; objective_value: number; summary: ScheduleSummary; content_sha256: string; created_at: string; intervals: ScheduleInterval[]; targets: ScheduleTarget[]; }
-export interface ScheduleDetail { schedule: ScheduleRecord; version: ScheduleVersion | null; }
+export interface ScheduleDetail { schedule: ScheduleRecord; version: ScheduleVersion | null; latest_decision: ScheduleDecision | null; }
+
+export type CommandStatus = "CREATED" | "DISPATCHED" | "ACCEPTED" | "EXECUTING" | "SUCCEEDED" | "FAILED" | "TIMED_OUT" | "CANCELLED";
+export interface DeviceCommand {
+  id: string; device_id: string; schedule_id: string | null; schedule_version_id: string | null;
+  parent_command_id: string | null; idempotency_key: string; action: "SET_POWER" | "STOP" | string;
+  parameters: Record<string, unknown>; status: CommandStatus;
+  not_before: string; expires_at: string; terminal_at: string | null;
+  last_reason_code: string | null; last_message: string | null; actual: unknown | null;
+  created_at: string; updated_at: string;
+}
+
+export interface CommandAttempt {
+  attempt_no: number; dispatched_at: string; latest_ack_at: string | null;
+  latest_ack_status: string | null; error_code: string | null;
+}
+
+export interface CommandEvent {
+  id: string; source_event_id: string | null; event_type: string; from_status: string | null;
+  reported_status: string; applied: boolean; reason_code: string | null; message: string | null;
+  actual: unknown | null; occurred_at: string; received_at: string;
+}
+
+export interface CommandDetail { command: DeviceCommand; attempts: CommandAttempt[]; events: CommandEvent[]; }
+export interface AuditEvent {
+  id: string; actor_id: string; action: string; object_type: string; object_id: string;
+  reason: string | null; before_digest: string | null; after_digest: string | null;
+  result: string; occurred_at: string;
+}
+export interface ScheduleExecution {
+  schedule_id: string; decision: ScheduleDecision | null;
+  command_total: number; command_offset: number; command_limit: number;
+  commands: CommandDetail[]; audit: AuditEvent[];
+}
