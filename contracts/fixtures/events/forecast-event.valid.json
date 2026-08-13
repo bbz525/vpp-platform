@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "event_id": "2255a7e6-b2c4-44ae-8944-cebf36144149",
+  "event_type": "FORECAST_SUCCEEDED",
+  "tenant_id": "7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941",
+  "forecast_run_id": "af7026f7-60bd-4377-9dc0-a9f95812915f",
+  "forecast_version_id": "0f4bacd0-51d2-4c0d-bab7-409903cafef1",
+  "target_type": "PORTFOLIO",
+  "target_id": "2b3cf078-c25a-45c2-b106-457d30728821",
+  "forecast_date": "2026-08-14",
+  "metric": "LOAD_KW",
+  "status": "SUCCEEDED",
+  "data_cutoff": "2026-08-13T00:20:00Z",
+  "occurred_at": "2026-08-13T00:20:03Z"
+}

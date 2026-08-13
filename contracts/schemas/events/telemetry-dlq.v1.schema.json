@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/events/telemetry-dlq.v1.schema.json",
+  "title": "Rejected telemetry dead-letter event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "schema_version", "failed_at", "error_code", "error_message",
+    "source_topic", "source_partition", "source_offset", "message_key", "payload_base64"
+  ],
+  "properties": {
+    "schema": { "const": "vpp.telemetry.dlq" },
+    "schema_version": { "const": 1 },
+    "failed_at": { "type": "string", "format": "date-time" },
+    "error_code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+    "error_message": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "source_topic": { "const": "vpp.telemetry.raw.v1" },
+    "source_partition": { "type": "integer", "minimum": 0 },
+    "source_offset": { "type": "integer", "minimum": 0 },
+    "message_key": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "payload_base64": { "type": "string", "contentEncoding": "base64" }
+  }
+}

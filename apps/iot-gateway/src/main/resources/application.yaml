@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: iot-gateway
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 5000
+        max.block.ms: 1000
+        buffer.memory: 16777216
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+server:
+  port: ${IOT_GATEWAY_PORT:8081}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+      show-details: never
+
+gateway:
+  environment: ${VPP_ENV:local}
+  mqtt:
+    enabled: ${IOT_GATEWAY_MQTT_ENABLED:false}
+    host: ${MQTT_HOST:127.0.0.1}
+    port: ${MQTT_PORT:1883}
+    client-id: ${IOT_GATEWAY_MQTT_CLIENT_ID:vpp-iot-gateway-local}
+    username: ${IOT_GATEWAY_MQTT_USERNAME:}
+    password: ${IOT_GATEWAY_MQTT_PASSWORD:}
+    tls: ${IOT_GATEWAY_MQTT_TLS:false}
+    connect-timeout: ${IOT_GATEWAY_MQTT_CONNECT_TIMEOUT:5s}
+  tcp:
+    enabled: ${IOT_GATEWAY_TCP_ENABLED:false}
+    bind-host: ${IOT_GATEWAY_TCP_BIND_HOST:127.0.0.1}
+    port: ${IOT_GATEWAY_TCP_PORT:18081}
+    tls: ${IOT_GATEWAY_TCP_TLS:false}
+    certificate-chain: ${IOT_GATEWAY_TCP_CERTIFICATE_CHAIN:}
+    private-key: ${IOT_GATEWAY_TCP_PRIVATE_KEY:}
+    idle-timeout: ${IOT_GATEWAY_TCP_IDLE_TIMEOUT:30s}
+  ingress:
+    worker-threads: ${IOT_GATEWAY_INGRESS_WORKERS:4}
+    queue-capacity: ${IOT_GATEWAY_INGRESS_QUEUE_CAPACITY:1024}
+    max-in-flight-kafka: ${IOT_GATEWAY_MAX_IN_FLIGHT_KAFKA:2048}
+    max-payload-bytes: ${IOT_GATEWAY_MAX_PAYLOAD_BYTES:65536}
+  commands:
+    enabled: ${IOT_GATEWAY_COMMANDS_ENABLED:false}
+    group-id: ${IOT_GATEWAY_COMMAND_GROUP_ID:vpp-iot-gateway-command-router-v1}
+  kafka:
+    raw-telemetry-topic: vpp.telemetry.raw.v1
+    command-requests-topic: vpp.command.requests.v1
+    command-events-topic: vpp.command.events.v1
+  identity:
+    local-dev-enabled: ${IOT_GATEWAY_LOCAL_IDENTITY_ENABLED:true}
+    control-plane-url: ${IOT_GATEWAY_CONTROL_PLANE_URL:http://127.0.0.1:8080}
+    control-plane-token: ${IOT_GATEWAY_CONTROL_PLANE_TOKEN:local-dev-platform-internal-token-only}
+    refresh-interval: ${IOT_GATEWAY_IDENTITY_REFRESH_INTERVAL:2s}
+    devices:
+      - tenant-id: 7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941
+        device-id: meter-001
+        credential: ${SIMULATOR_TCP_CREDENTIAL:local-dev-tcp-only}
+      - tenant-id: 7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941
+        device-id: pv-001
+        credential: ${SIMULATOR_TCP_CREDENTIAL:local-dev-tcp-only}
+      - tenant-id: 7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941
+        device-id: bess-001
+        credential: ${SIMULATOR_TCP_CREDENTIAL:local-dev-tcp-only}
+      - tenant-id: 7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941
+        device-id: evse-001
+        credential: ${SIMULATOR_TCP_CREDENTIAL:local-dev-tcp-only}

@@ -1,0 +1,22 @@
+{
+  "valid": [
+    { "schema": "https://vpp.local/schemas/mqtt/telemetry-up.v1.schema.json", "fixture": "mqtt/telemetry-up.valid.json" },
+    { "schema": "https://vpp.local/schemas/mqtt/heartbeat-up.v1.schema.json", "fixture": "mqtt/heartbeat-up.valid.json" },
+    { "schema": "https://vpp.local/schemas/events/normalized-telemetry.v1.schema.json", "fixture": "events/normalized-telemetry.valid.json" },
+    { "schema": "https://vpp.local/schemas/events/telemetry-dlq.v1.schema.json", "fixture": "events/telemetry-dlq.valid.json" },
+    { "schema": "https://vpp.local/schemas/commands/command-requested.v1.schema.json", "fixture": "commands/command-requested.valid.json" },
+    { "schema": "https://vpp.local/schemas/commands/command-ack.v1.schema.json", "fixture": "commands/command-ack.valid.json" },
+    { "schema": "https://vpp.local/schemas/events/alarm-event.v1.schema.json", "fixture": "events/alarm-event.valid.json" },
+    { "schema": "https://vpp.local/schemas/events/forecast-event.v1.schema.json", "fixture": "events/forecast-event.valid.json" },
+    { "schema": "https://vpp.local/schemas/events/schedule-approved.v1.schema.json", "fixture": "events/schedule-approved.valid.json" },
+    { "schema": "https://vpp.local/schemas/events/schedule-generated.v1.schema.json", "fixture": "events/schedule-generated.valid.json" },
+    { "schema": "https://vpp.local/schemas/websocket/subscribe.v1.schema.json", "fixture": "websocket/subscribe.valid.json" },
+    { "schema": "https://vpp.local/schemas/websocket/event.v1.schema.json", "fixture": "websocket/event.valid.json" },
+    { "schema": "https://vpp.local/schemas/websocket/control.v1.schema.json", "fixture": "websocket/control.valid.json" }
+  ],
+  "invalid": [
+    { "schema": "https://vpp.local/schemas/mqtt/telemetry-up.v1.schema.json", "fixture": "mqtt/telemetry-up.missing-event-id.invalid.json" },
+    { "schema": "https://vpp.local/schemas/commands/command-requested.v1.schema.json", "fixture": "commands/command-requested.bad-action.invalid.json" },
+    { "schema": "https://vpp.local/schemas/commands/command-ack.v1.schema.json", "fixture": "commands/command-ack.bad-status.invalid.json" }
+  ]
+}

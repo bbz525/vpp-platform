@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/websocket/event.v1.schema.json",
+  "title": "WebSocket server event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "channel", "cursor", "occurred_at", "data"],
+  "properties": {
+    "type": { "const": "event" },
+    "channel": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "cursor": { "type": "string", "pattern": "^[0-9]{16}$" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "data": { "type": "object", "additionalProperties": true }
+  }
+}
+

@@ -1,0 +1,6 @@
+{
+  "type": "resync_required",
+  "request_id": "req-2",
+  "code": "CURSOR_EXPIRED",
+  "message": "resume cursor is outside the retained window"
+}

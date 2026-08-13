@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "sequence": 48121,
+  "device_time": "2026-08-12T01:00:00.000Z",
+  "metrics": { "active_power_kw": 120.5 }
+}
+

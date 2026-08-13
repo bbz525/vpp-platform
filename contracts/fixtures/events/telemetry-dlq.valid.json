@@ -1,0 +1,12 @@
+{
+  "schema": "vpp.telemetry.dlq",
+  "schema_version": 1,
+  "failed_at": "2026-08-12T01:00:00.200Z",
+  "error_code": "UNKNOWN_METRIC",
+  "error_message": "metric is not defined by the device model: voltage_magic",
+  "source_topic": "vpp.telemetry.raw.v1",
+  "source_partition": 1,
+  "source_offset": 42,
+  "message_key": "7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941:bess-001",
+  "payload_base64": "e30="
+}

@@ -1,0 +1,78 @@
+spring:
+  application:
+    name: stream-processor
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    security:
+      protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      properties:
+        isolation.level: read_committed
+        max.poll.records: 100
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 5000
+    listener:
+      ack-mode: manual_immediate
+      immediate-stop: true
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
+server:
+  port: ${STREAM_PROCESSOR_PORT:8082}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+      show-details: never
+
+stream:
+  enabled: ${STREAM_PROCESSOR_ENABLED:false}
+  environment: ${VPP_ENV:local}
+  redis-tls: ${REDIS_SSL_ENABLED:false}
+  catalog:
+    url: ${PLATFORM_API_URL:http://127.0.0.1:8080}
+    token: ${PLATFORM_INTERNAL_TOKEN:local-dev-platform-internal-token-only}
+    refresh-interval: ${STREAM_CATALOG_REFRESH_INTERVAL:5s}
+    miss-grace-period: ${STREAM_CATALOG_MISS_GRACE_PERIOD:30s}
+  clickhouse:
+    url: ${CLICKHOUSE_JDBC_URL:jdbc:clickhouse://127.0.0.1:8123/vpp}
+    username: ${CLICKHOUSE_USER:vpp}
+    password: ${CLICKHOUSE_PASSWORD:local-dev-clickhouse-only}
+  kafka:
+    group-id: ${STREAM_PROCESSOR_GROUP_ID:vpp-telemetry-normalizer-v1}
+    security-protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+    raw-topic: vpp.telemetry.raw.v1
+    normalized-topic: vpp.telemetry.normalized.v1
+    device-state-topic: vpp.device-state.changed.v1
+    aggregate-snapshot-topic: vpp.aggregate-snapshot.v1
+    dlq-topic: vpp.telemetry.dlq.v1
+  quality:
+    max-clock-drift: ${STREAM_MAX_CLOCK_DRIFT:5m}
+    late-arrival-threshold: ${STREAM_LATE_ARRIVAL_THRESHOLD:2m}
+  state:
+    dedup-ttl: ${STREAM_DEDUP_TTL:7d}
+    device-ttl: ${STREAM_DEVICE_STATE_TTL:2h}
+    aggregate-ttl: ${STREAM_AGGREGATE_STATE_TTL:10m}
+    resume-ttl: ${STREAM_WS_RESUME_TTL:10m}
+    resume-max-length: ${STREAM_WS_RESUME_MAX_LENGTH:1000}
+  sink-timeout: ${STREAM_SINK_TIMEOUT:10s}

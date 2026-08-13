@@ -1,0 +1,47 @@
+name: VPP Platform CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  contract-and-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.8"
+          enable-cache: true
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Validate local environment policy
+        run: make validate-env
+      - name: Verify production fail-fast policy
+        run: |
+          if VPP_ENV=production node scripts/validate-env.mjs; then
+            echo "Production validation unexpectedly accepted missing secrets"
+            exit 1
+          fi
+      - name: Validate executable contracts
+        run: make test-contract
+      - name: Test Java skeletons
+        run: make test-java
+      - name: Build and test web skeleton
+        run: make test-web && npm run build --workspace @vpp/web-console
+      - name: Sync and test forecast skeleton
+        run: uv sync --directory services/forecast-service --locked && make test-python
+      - name: Validate Compose topology
+        run: make compose-config

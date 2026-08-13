@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/events/normalized-telemetry.v1.schema.json",
+  "title": "Normalized telemetry event",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema", "schema_version", "event_id", "event_type", "tenant_id",
+    "aggregate_type", "aggregate_id", "occurred_at", "produced_at", "trace_id",
+    "correlation_id", "producer", "data_quality", "payload"
+  ],
+  "properties": {
+    "schema": { "const": "vpp.telemetry.normalized" },
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "TelemetryAccepted" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "aggregate_type": { "const": "DEVICE" },
+    "aggregate_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "produced_at": { "type": "string", "format": "date-time" },
+    "trace_id": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+    "correlation_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "causation_id": { "type": ["string", "null"], "maxLength": 128 },
+    "producer": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "data_quality": { "$ref": "../common/data-quality.v1.schema.json" },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["site_id", "device_type", "sequence", "ingested_at", "metrics"],
+      "properties": {
+        "portfolio_id": { "type": "string", "format": "uuid" },
+        "site_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "device_uuid": { "type": "string", "format": "uuid" },
+        "device_type": { "type": "string", "enum": ["METER", "PV_INVERTER", "BATTERY", "EV_CHARGER"] },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "ingested_at": { "type": "string", "format": "date-time" },
+        "metrics": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_]{1,63}$" },
+          "additionalProperties": { "type": "number" }
+        }
+      }
+    }
+  }
+}

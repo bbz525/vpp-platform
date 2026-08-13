@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/events/alarm-event.v1.schema.json",
+  "title": "Alarm lifecycle event",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version", "event_id", "event_type", "tenant_id", "alarm_id", "rule_id",
+    "object_type", "object_id", "severity", "to_state", "occurred_at", "occurrence_count", "evidence"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "type": "string", "enum": ["AlarmOpened", "AlarmRepeated", "AlarmAcknowledged", "AlarmRecovered", "AlarmClosed"] },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "alarm_id": { "type": "string", "format": "uuid" },
+    "rule_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "object_type": { "type": "string", "enum": ["PORTFOLIO", "SITE", "DEVICE", "COMMAND"] },
+    "object_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "severity": { "type": "string", "enum": ["INFO", "WARNING", "MAJOR", "CRITICAL"] },
+    "from_state": { "type": ["string", "null"], "enum": ["OPEN", "ACKNOWLEDGED", "RECOVERED", "CLOSED", null] },
+    "to_state": { "type": "string", "enum": ["OPEN", "ACKNOWLEDGED", "RECOVERED", "CLOSED"] },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "occurrence_count": { "type": "integer", "minimum": 1 },
+    "actor_id": { "type": ["string", "null"], "maxLength": 128 },
+    "reason": { "type": ["string", "null"], "maxLength": 500 },
+    "evidence": { "type": "object", "additionalProperties": true }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "event_id": "0198c8d7-c8dc-7ae2-a3a1-eef5c6eddb64",
+  "sequence": 48122,
+  "device_time": "2026-08-12T01:00:05.000Z",
+  "firmware_version": "sim-1.0.0",
+  "uptime_seconds": 86400,
+  "extensions": {
+    "data_quality_source": "SIMULATED"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/common/data-quality.v1.schema.json",
+  "title": "Data quality",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "flags", "source"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["VALID", "SUSPECT", "INVALID", "ESTIMATED", "OVERRIDDEN"]
+    },
+    "flags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "CLOCK_DRIFT", "LATE_ARRIVAL", "OUT_OF_RANGE", "DUPLICATE",
+          "COUNTER_RESET", "MISSING_INTERVAL", "INTERPOLATED", "MANUAL_OVERRIDE",
+          "SIMULATED_SOURCE", "UNKNOWN_UNIT", "SCHEMA_MISMATCH"
+        ]
+      }
+    },
+    "source": {
+      "type": "string",
+      "enum": ["DEVICE", "SIMULATED", "IMPORTED", "DERIVED", "MANUAL"]
+    }
+  }
+}
+

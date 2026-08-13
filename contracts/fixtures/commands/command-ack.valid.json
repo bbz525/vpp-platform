@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "event_id": "0198c8d7-c8dc-7ae2-a3a1-eef5c6eddb71",
+  "command_id": "0198c8d7-c8dc-7ae2-a3a1-eef5c6eddb70",
+  "idempotency_key": "schedule-42:v3:bess-001:2026-08-13T01:00Z:set-power",
+  "device_time": "2026-08-13T01:00:01.200Z",
+  "status": "ACCEPTED",
+  "reason_code": null,
+  "message": null,
+  "actual": null
+}
+

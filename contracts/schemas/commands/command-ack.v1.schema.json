@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/commands/command-ack.v1.schema.json",
+  "title": "Device command acknowledgement",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "event_id", "command_id", "idempotency_key", "device_time", "status"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "format": "uuid" },
+    "command_id": { "type": "string", "format": "uuid" },
+    "idempotency_key": { "type": "string", "minLength": 8, "maxLength": 256 },
+    "device_time": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["ACCEPTED", "EXECUTING", "SUCCEEDED", "FAILED"] },
+    "reason_code": { "type": ["string", "null"], "maxLength": 64 },
+    "message": { "type": ["string", "null"], "maxLength": 500 },
+    "actual": { "type": ["object", "null"], "additionalProperties": true }
+  }
+}

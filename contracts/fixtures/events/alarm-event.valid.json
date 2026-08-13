@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "event_id": "0198c8d7-c8dc-7ae2-a3a1-eef5c6eddb80",
+  "event_type": "AlarmOpened",
+  "tenant_id": "7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941",
+  "alarm_id": "4e0d2bfc-98d6-4c62-b51d-0148a13ca42b",
+  "rule_id": "battery-soc-high-v1",
+  "object_type": "DEVICE",
+  "object_id": "bess-001",
+  "severity": "MAJOR",
+  "from_state": null,
+  "to_state": "OPEN",
+  "occurred_at": "2026-08-12T01:00:00.000Z",
+  "occurrence_count": 1,
+  "actor_id": null,
+  "reason": null,
+  "evidence": { "soc_pct": 96.1, "limit_pct": 95.0 }
+}
+

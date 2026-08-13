@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/mqtt/telemetry-up.v1.schema.json",
+  "title": "MQTT telemetry upload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "sequence", "device_time", "metrics"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "format": "uuid" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "device_time": { "type": "string", "format": "date-time" },
+    "metrics": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{1,63}$" },
+      "additionalProperties": { "type": "number" }
+    },
+    "status": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}
+

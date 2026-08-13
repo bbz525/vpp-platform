@@ -1,0 +1,25 @@
+{
+  "name": "vpp-platform",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "workspaces": [
+    "apps/web-console"
+  ],
+  "scripts": {
+    "contract:lint": "spectral lint --ruleset contracts/.spectral.yaml contracts/openapi/platform-api.v1.yaml && SUPPRESS_NO_CONFIG_WARNING=true ASYNCAPI_METRICS_CONFIG_PATH=contracts/.asyncapi-analytics.json asyncapi validate contracts/asyncapi/vpp-events.v1.yaml",
+    "contract:test": "node contracts/tests/validate-contracts.mjs",
+    "test": "npm run contract:test && npm run test --workspace @vpp/web-console"
+  },
+  "devDependencies": {
+    "@asyncapi/cli": "6.0.2",
+    "@stoplight/spectral-cli": "6.16.3",
+    "@stoplight/spectral-rulesets": "1.22.7",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "yaml": "2.9.0"
+  }
+}

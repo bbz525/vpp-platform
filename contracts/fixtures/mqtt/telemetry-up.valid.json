@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "event_id": "0198c8d7-c8dc-7ae2-a3a1-eef5c6eddb63",
+  "sequence": 48121,
+  "device_time": "2026-08-12T01:00:00.000Z",
+  "metrics": {
+    "active_power_kw": 120.5,
+    "soc_pct": 63.2,
+    "available_capacity_kwh": 452.8
+  },
+  "status": "RUNNING",
+  "extensions": {
+    "simulator_scenario": "sunny-weekday",
+    "device_type": "BATTERY",
+    "data_quality_source": "SIMULATED"
+  }
+}

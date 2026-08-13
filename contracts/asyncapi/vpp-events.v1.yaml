@@ -1,0 +1,251 @@
+asyncapi: 3.1.0
+info:
+  title: VPP Device and Event APIs
+  version: 1.0.0
+  description: Executable MQTT, Kafka and WebSocket contracts for the VPP platform.
+  license:
+    name: Apache-2.0
+defaultContentType: application/json
+servers:
+  mqttLocal:
+    host: localhost:1883
+    protocol: mqtt
+    description: Local simulation broker; production requires TLS and per-device ACLs.
+  kafkaLocal:
+    host: localhost:9092
+    protocol: kafka
+    description: Local single-node KRaft broker.
+  websocketLocal:
+    host: localhost:8080
+    pathname: /ws/v1
+    protocol: ws
+    description: Local realtime gateway.
+channels:
+  telemetryUp:
+    address: vpp/{tenantId}/{deviceId}/up/telemetry
+    servers: [$ref: "#/servers/mqttLocal"]
+    parameters:
+      tenantId: { $ref: "#/components/parameters/tenantId" }
+      deviceId: { $ref: "#/components/parameters/deviceId" }
+    messages:
+      telemetryUp: { $ref: "#/components/messages/telemetryUp" }
+  heartbeatUp:
+    address: vpp/{tenantId}/{deviceId}/up/heartbeat
+    servers: [$ref: "#/servers/mqttLocal"]
+    parameters:
+      tenantId: { $ref: "#/components/parameters/tenantId" }
+      deviceId: { $ref: "#/components/parameters/deviceId" }
+    messages:
+      heartbeatUp: { $ref: "#/components/messages/heartbeatUp" }
+  commandAckUp:
+    address: vpp/{tenantId}/{deviceId}/up/command-ack
+    servers: [$ref: "#/servers/mqttLocal"]
+    parameters:
+      tenantId: { $ref: "#/components/parameters/tenantId" }
+      deviceId: { $ref: "#/components/parameters/deviceId" }
+    messages:
+      commandAck: { $ref: "#/components/messages/commandAck" }
+  commandDown:
+    address: vpp/{tenantId}/{deviceId}/down/command
+    servers: [$ref: "#/servers/mqttLocal"]
+    parameters:
+      tenantId: { $ref: "#/components/parameters/tenantId" }
+      deviceId: { $ref: "#/components/parameters/deviceId" }
+    messages:
+      commandRequested: { $ref: "#/components/messages/commandRequested" }
+  telemetryRawKafka:
+    address: vpp.telemetry.raw.v1
+    servers: [$ref: "#/servers/kafkaLocal"]
+    messages:
+      telemetryRaw: { $ref: "#/components/messages/telemetryUp" }
+  telemetryNormalizedKafka:
+    address: vpp.telemetry.normalized.v1
+    servers: [$ref: "#/servers/kafkaLocal"]
+    messages:
+      telemetryNormalized: { $ref: "#/components/messages/telemetryNormalized" }
+  telemetryDlqKafka:
+    address: vpp.telemetry.dlq.v1
+    servers: [$ref: "#/servers/kafkaLocal"]
+    messages:
+      telemetryDlq: { $ref: "#/components/messages/telemetryDlq" }
+  alarmEventsKafka:
+    address: vpp.alarm.events.v1
+    servers: [$ref: "#/servers/kafkaLocal"]
+    messages:
+      alarmEvent: { $ref: "#/components/messages/alarmEvent" }
+  scheduleEventsKafka:
+    address: vpp.schedule.events.v1
+    servers: [$ref: "#/servers/kafkaLocal"]
+    messages:
+      scheduleGenerated: { $ref: "#/components/messages/scheduleGenerated" }
+      scheduleApproved: { $ref: "#/components/messages/scheduleApproved" }
+  forecastEventsKafka:
+    address: vpp.forecast.events.v1
+    servers: [$ref: "#/servers/kafkaLocal"]
+    messages:
+      forecastEvent: { $ref: "#/components/messages/forecastEvent" }
+  commandRequestsKafka:
+    address: vpp.command.requests.v1
+    servers: [$ref: "#/servers/kafkaLocal"]
+    messages:
+      commandRequested: { $ref: "#/components/messages/commandRequested" }
+  commandEventsKafka:
+    address: vpp.command.events.v1
+    servers: [$ref: "#/servers/kafkaLocal"]
+    messages:
+      commandAck: { $ref: "#/components/messages/commandAck" }
+  realtimeWebSocket:
+    address: /ws/v1
+    servers: [$ref: "#/servers/websocketLocal"]
+    messages:
+      subscribe: { $ref: "#/components/messages/websocketSubscribe" }
+      event: { $ref: "#/components/messages/websocketEvent" }
+      control: { $ref: "#/components/messages/websocketControl" }
+operations:
+  receiveDeviceTelemetry:
+    action: receive
+    channel: { $ref: "#/channels/telemetryUp" }
+    messages: [$ref: "#/channels/telemetryUp/messages/telemetryUp"]
+  receiveDeviceHeartbeat:
+    action: receive
+    channel: { $ref: "#/channels/heartbeatUp" }
+    messages: [$ref: "#/channels/heartbeatUp/messages/heartbeatUp"]
+  receiveDeviceCommandAck:
+    action: receive
+    channel: { $ref: "#/channels/commandAckUp" }
+    messages: [$ref: "#/channels/commandAckUp/messages/commandAck"]
+  sendDeviceCommand:
+    action: send
+    channel: { $ref: "#/channels/commandDown" }
+    messages: [$ref: "#/channels/commandDown/messages/commandRequested"]
+  publishRawTelemetry:
+    action: send
+    channel: { $ref: "#/channels/telemetryRawKafka" }
+    messages: [$ref: "#/channels/telemetryRawKafka/messages/telemetryRaw"]
+  publishNormalizedTelemetry:
+    action: send
+    channel: { $ref: "#/channels/telemetryNormalizedKafka" }
+    messages: [$ref: "#/channels/telemetryNormalizedKafka/messages/telemetryNormalized"]
+  publishRejectedTelemetry:
+    action: send
+    channel: { $ref: "#/channels/telemetryDlqKafka" }
+    messages: [$ref: "#/channels/telemetryDlqKafka/messages/telemetryDlq"]
+  publishAlarmEvent:
+    action: send
+    channel: { $ref: "#/channels/alarmEventsKafka" }
+    messages: [$ref: "#/channels/alarmEventsKafka/messages/alarmEvent"]
+  publishScheduleApproved:
+    action: send
+    channel: { $ref: "#/channels/scheduleEventsKafka" }
+    messages: [$ref: "#/channels/scheduleEventsKafka/messages/scheduleApproved"]
+  publishScheduleGenerated:
+    action: send
+    channel: { $ref: "#/channels/scheduleEventsKafka" }
+    messages: [$ref: "#/channels/scheduleEventsKafka/messages/scheduleGenerated"]
+  publishForecastEvent:
+    action: send
+    channel: { $ref: "#/channels/forecastEventsKafka" }
+    messages: [$ref: "#/channels/forecastEventsKafka/messages/forecastEvent"]
+  publishCommandRequest:
+    action: send
+    channel: { $ref: "#/channels/commandRequestsKafka" }
+    messages: [$ref: "#/channels/commandRequestsKafka/messages/commandRequested"]
+  publishCommandEvent:
+    action: send
+    channel: { $ref: "#/channels/commandEventsKafka" }
+    messages: [$ref: "#/channels/commandEventsKafka/messages/commandAck"]
+  receiveRealtimeSubscription:
+    action: receive
+    channel: { $ref: "#/channels/realtimeWebSocket" }
+    messages: [$ref: "#/channels/realtimeWebSocket/messages/subscribe"]
+  sendRealtimeEvent:
+    action: send
+    channel: { $ref: "#/channels/realtimeWebSocket" }
+    messages:
+      - $ref: "#/channels/realtimeWebSocket/messages/event"
+      - $ref: "#/channels/realtimeWebSocket/messages/control"
+components:
+  parameters:
+    tenantId:
+      description: Authorized tenant UUID.
+    deviceId:
+      description: Tenant-scoped immutable device identifier.
+  messages:
+    telemetryUp:
+      name: TelemetryUpV1
+      title: Device telemetry upload
+      contentType: application/json
+      payload:
+        $ref: ../schemas/mqtt/telemetry-up.v1.schema.json
+    heartbeatUp:
+      name: HeartbeatUpV1
+      title: Device heartbeat upload
+      contentType: application/json
+      payload:
+        $ref: ../schemas/mqtt/heartbeat-up.v1.schema.json
+    telemetryNormalized:
+      name: NormalizedTelemetryV1
+      title: Standardized telemetry fact
+      contentType: application/json
+      payload:
+        $ref: ../schemas/events/normalized-telemetry.v1.schema.json
+    telemetryDlq:
+      name: TelemetryDlqV1
+      title: Rejected raw telemetry with a machine-readable reason
+      contentType: application/json
+      payload:
+        $ref: ../schemas/events/telemetry-dlq.v1.schema.json
+    commandRequested:
+      name: CommandRequestedV1
+      title: Idempotent device command
+      contentType: application/json
+      payload:
+        $ref: ../schemas/commands/command-requested.v1.schema.json
+    commandAck:
+      name: CommandAckV1
+      title: Device command acknowledgement or terminal result
+      contentType: application/json
+      payload:
+        $ref: ../schemas/commands/command-ack.v1.schema.json
+    alarmEvent:
+      name: AlarmEventV1
+      title: Alarm lifecycle fact
+      contentType: application/json
+      payload:
+        $ref: ../schemas/events/alarm-event.v1.schema.json
+    scheduleApproved:
+      name: ScheduleApprovedV1
+      title: Immutable approved schedule fact
+      contentType: application/json
+      payload:
+        $ref: ../schemas/events/schedule-approved.v1.schema.json
+    scheduleGenerated:
+      name: ScheduleGeneratedV1
+      title: Terminal schedule generation and feasibility fact
+      contentType: application/json
+      payload:
+        $ref: ../schemas/events/schedule-generated.v1.schema.json
+    forecastEvent:
+      name: ForecastEventV1
+      title: Forecast run terminal fact
+      contentType: application/json
+      payload:
+        $ref: ../schemas/events/forecast-event.v1.schema.json
+    websocketSubscribe:
+      name: WebSocketSubscribeV1
+      title: Authorized realtime channel subscription request
+      contentType: application/json
+      payload:
+        $ref: ../schemas/websocket/subscribe.v1.schema.json
+    websocketEvent:
+      name: WebSocketEventV1
+      title: Cursor-addressable realtime event
+      contentType: application/json
+      payload:
+        $ref: ../schemas/websocket/event.v1.schema.json
+    websocketControl:
+      name: WebSocketControlV1
+      title: Connection, authorization and cursor recovery control message
+      contentType: application/json
+      payload:
+        $ref: ../schemas/websocket/control.v1.schema.json

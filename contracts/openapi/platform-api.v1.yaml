@@ -1,0 +1,1204 @@
+openapi: 3.1.0
+info:
+  title: VPP Platform API
+  version: 1.0.0
+  description: Control-plane API contract for the VPP platform.
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+tags:
+  - name: Health
+  - name: Resources
+  - name: Tariffs
+  - name: Audit
+  - name: Alarms
+  - name: Internal
+  - name: Snapshots
+  - name: Forecasts
+  - name: Schedules
+paths:
+  /alarm-rules:
+    get:
+      operationId: listAlarmRules
+      tags: [Alarms]
+      summary: List versioned alarm rules and execution coverage
+      description: Returns every tenant rule version with ACTIVE or UNSUPPORTED coverage status.
+      responses:
+        "200": { description: Tenant alarm rules, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AlarmRule" } } } } }
+    post:
+      operationId: createAlarmRule
+      tags: [Alarms]
+      summary: Create a new immutable alarm rule version
+      description: Creates a tenant-scoped rule and records an audit event without mutating previous versions.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateAlarmRuleRequest" } } } }
+      responses:
+        "201": { description: Rule created, content: { application/json: { schema: { $ref: "#/components/schemas/AlarmRule" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /alarms/coverage:
+    get:
+      operationId: getAlarmCoverage
+      tags: [Alarms]
+      summary: Return truthful alarm evaluation coverage
+      description: Reports unsupported enabled rules so the console cannot imply complete monitoring.
+      responses:
+        "200": { description: Coverage summary, content: { application/json: { schema: { $ref: "#/components/schemas/AlarmCoverage" } } } }
+  /alarms:
+    get:
+      operationId: listAlarms
+      tags: [Alarms]
+      summary: List tenant-scoped alarm instances
+      description: Filters persisted alarm lifecycle instances by authorized tenant, portfolio, state and severity.
+      parameters:
+        - { name: state, in: query, schema: { type: string, enum: [OPEN, ACKNOWLEDGED, RECOVERED, CLOSED] } }
+        - { name: severity, in: query, schema: { type: string, enum: [INFO, WARNING, MAJOR, CRITICAL] } }
+        - { name: portfolioId, in: query, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200": { description: Alarm instances, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Alarm" } } } } }
+  /alarms/{alarmId}:
+    get:
+      operationId: getAlarm
+      tags: [Alarms]
+      summary: Get an alarm and immutable timeline
+      description: Returns the current aggregate state with every append-only lifecycle transition and note.
+      parameters: [{ $ref: "#/components/parameters/AlarmId" }]
+      responses:
+        "200": { description: Alarm detail, content: { application/json: { schema: { $ref: "#/components/schemas/AlarmDetail" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /alarms/{alarmId}/acknowledge:
+    post:
+      operationId: acknowledgeAlarm
+      tags: [Alarms]
+      summary: Record human acknowledgement without claiming recovery
+      description: Records actor and reason while preserving recovery as a separate system fact.
+      parameters: [{ $ref: "#/components/parameters/AlarmId" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AlarmAction" } } } }
+      responses: { "200": { description: Acknowledged alarm, content: { application/json: { schema: { $ref: "#/components/schemas/Alarm" } } } }, "409": { $ref: "#/components/responses/Conflict" } }
+  /alarms/{alarmId}/notes:
+    post:
+      operationId: noteAlarm
+      tags: [Alarms]
+      summary: Append an operational note
+      description: Adds an immutable note and audit event without changing the aggregate state.
+      parameters: [{ $ref: "#/components/parameters/AlarmId" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AlarmAction" } } } }
+      responses: { "200": { description: Updated timeline, content: { application/json: { schema: { $ref: "#/components/schemas/AlarmDetail" } } } } }
+  /alarms/{alarmId}/close:
+    post:
+      operationId: closeAlarm
+      tags: [Alarms]
+      summary: Close an acknowledged or recovered alarm
+      description: Ends the current lifecycle only after acknowledgement or condition recovery and preserves all evidence.
+      parameters: [{ $ref: "#/components/parameters/AlarmId" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AlarmAction" } } } }
+      responses: { "200": { description: Closed alarm, content: { application/json: { schema: { $ref: "#/components/schemas/Alarm" } } } }, "409": { $ref: "#/components/responses/Conflict" } }
+  /health:
+    get:
+      operationId: getApiHealth
+      tags: [Health]
+      summary: Return the public API health summary
+      description: Reports API availability without exposing dependency or secret details.
+      responses:
+        "200":
+          description: API is available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /portfolios/{portfolioId}/snapshot:
+    get:
+      operationId: getPortfolioSnapshot
+      tags: [Snapshots]
+      summary: Return the latest authorized portfolio snapshot
+      description: Returns explicit freshness and quality so stale data cannot appear live.
+      parameters:
+        - $ref: "#/components/parameters/PortfolioId"
+      responses:
+        "200":
+          description: Latest snapshot; freshness and quality are always explicit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioSnapshot"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /telemetry/query:
+    get:
+      operationId: queryTelemetry
+      tags: [Snapshots]
+      summary: Query an authorized real telemetry curve
+      description: Reads logically deduplicated ClickHouse facts and never backfills missing points.
+      parameters:
+        - { name: targetType, in: query, required: true, schema: { type: string, enum: [PORTFOLIO, SITE, DEVICE] } }
+        - { name: targetId, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: metric, in: query, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Authorized device series for the requested target and interval
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelemetryQueryResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /realtime/tickets:
+    post:
+      operationId: issueRealtimeTicket
+      tags: [Snapshots]
+      summary: Issue a one-time short-lived WebSocket handshake ticket
+      description: Binds a random one-time ticket to the authenticated actor without exposing a long-lived token in the WebSocket URL.
+      responses:
+        "200":
+          description: Ticket is valid for 30 seconds and is consumed on first handshake
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RealtimeTicket" }
+  /portfolios:
+    get:
+      operationId: listPortfolios
+      tags: [Resources]
+      summary: List portfolios in the authenticated tenant
+      description: Returns only portfolios belonging to the authenticated tenant.
+      responses:
+        "200":
+          description: Authorized portfolios
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Portfolio" } }
+    post:
+      operationId: createPortfolio
+      tags: [Resources]
+      summary: Create a tenant-scoped resource portfolio
+      description: Requires TENANT_ADMIN and records an audit event in the same transaction.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePortfolioRequest" }
+      responses:
+        "201":
+          description: Portfolio created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Portfolio" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /sites:
+    post:
+      operationId: createSite
+      tags: [Resources]
+      summary: Create a site inside an authorized portfolio
+      description: The portfolio lookup is tenant scoped and an invalid time zone is rejected.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSiteRequest" }
+      responses:
+        "201":
+          description: Site created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Site" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /device-models:
+    post:
+      operationId: createDeviceModel
+      tags: [Resources]
+      summary: Create a versioned device model and telemetry point schema
+      description: Model names are unique by tenant and schema version.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDeviceModelRequest" }
+      responses:
+        "201":
+          description: Device model created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceModel" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /devices:
+    get:
+      operationId: listDevices
+      tags: [Resources]
+      summary: List devices in the authenticated tenant only
+      description: Never returns devices belonging to another tenant.
+      responses:
+        "200":
+          description: Tenant-scoped device list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Device" }
+    post:
+      operationId: createDevice
+      tags: [Resources]
+      summary: Register a device with capabilities
+      description: A new device remains PENDING until an active credential is provisioned.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDeviceRequest" }
+      responses:
+        "201":
+          description: Device registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /devices/{deviceId}:
+    get:
+      operationId: getDevice
+      tags: [Resources]
+      summary: Get one tenant-scoped device
+      description: Returns not found for both missing and cross-tenant device identifiers.
+      parameters: [{ $ref: "#/components/parameters/DeviceId" }]
+      responses:
+        "200":
+          description: Device found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{deviceId}/status:
+    put:
+      operationId: updateDeviceStatus
+      tags: [Resources]
+      summary: Change device eligibility status and increment configuration version
+      description: ACTIVE requires a current credential; other states remove scheduling eligibility.
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDeviceStatusRequest" }
+      responses:
+        "200":
+          description: Updated device
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /devices/{deviceId}/credentials:
+    post:
+      operationId: rotateDeviceCredential
+      tags: [Resources]
+      summary: Replace a device credential without returning or storing its plaintext
+      description: Stores a keyed verifier and revokes the previous reference atomically.
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RotateCredentialRequest" }
+      responses:
+        "201":
+          description: Credential verifier stored; plaintext is never returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialReference" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /tariff-plans:
+    get:
+      operationId: listTariffPlans
+      tags: [Tariffs]
+      summary: List versioned tariff plans in the authenticated tenant
+      description: Returns tariff metadata for schedule input selection; interval prices remain frozen by the referenced plan version.
+      responses:
+        "200":
+          description: Tariff plans ordered by creation time, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TariffPlan" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createTariffPlan
+      tags: [Tariffs]
+      summary: Create a versioned tariff whose UTC intervals cannot overlap
+      description: Application validation and a PostgreSQL exclusion constraint both reject overlap.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTariffPlanRequest" }
+      responses:
+        "201":
+          description: Tariff created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TariffPlan" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /audit-events:
+    get:
+      operationId: listAuditEvents
+      tags: [Audit]
+      summary: Query append-only audit events in the authenticated tenant
+      description: TENANT_ADMIN and AUDITOR can read but no API can mutate audit rows.
+      parameters:
+        - { name: objectType, in: query, schema: { type: string } }
+        - { name: objectId, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Audit events ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEvent" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /internal/device-identities:
+    get:
+      operationId: listActiveDeviceIdentities
+      tags: [Internal]
+      summary: Return active device verifier snapshots to an authenticated gateway
+      description: Protected by a service token and intended for background gateway cache refresh.
+      security: []
+      parameters:
+        - name: X-VPP-Internal-Token
+          in: header
+          required: true
+          schema: { type: string, minLength: 16 }
+      responses:
+        "200":
+          description: Active device identities; verifier is never a plaintext credential
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InternalDeviceIdentity" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /internal/device-catalog:
+    get:
+      operationId: listInternalDeviceCatalog
+      tags: [Internal]
+      summary: Return tenant-scoped device metadata for stream processing
+      description: Provides an immutable refresh snapshot; consumers must not query this endpoint on Kafka or Netty event threads.
+      security: []
+      parameters:
+        - name: X-VPP-Internal-Token
+          in: header
+          required: true
+          schema: { type: string, minLength: 16 }
+      responses:
+        "200":
+          description: Device catalog including inactive devices so historical Kafka replay remains resolvable
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InternalDeviceCatalogEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /forecast-runs:
+    get:
+      operationId: listForecastRuns
+      tags: [Forecasts]
+      summary: List recent tenant forecast runs
+      description: Returns tenant-scoped runs newest first, optionally filtered by one target.
+      parameters:
+        - name: targetId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Recent forecast runs
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ForecastRun" } }
+    post:
+      operationId: createForecastRun
+      tags: [Forecasts]
+      summary: Start an asynchronous forecast run
+      description: Creates an idempotent run that may explicitly end as insufficient data.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateForecastRunRequest"
+      responses:
+        "202":
+          description: Forecast run accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastRun"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /forecast-runs/{forecastRunId}:
+    get:
+      operationId: getForecastRun
+      tags: [Forecasts]
+      summary: Get forecast status and data-quality outcome
+      description: Returns status, immutable model reference and data cutoff when available.
+      parameters:
+        - $ref: "#/components/parameters/ForecastRunId"
+      responses:
+        "200":
+          description: Forecast run found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastRunDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /forecasts/{forecastVersionId}:
+    get:
+      operationId: getForecastVersion
+      tags: [Forecasts]
+      summary: Get an immutable forecast version and its complete point series
+      description: Reads one tenant-scoped append-only model or manual override version.
+      parameters:
+        - $ref: "#/components/parameters/ForecastVersionId"
+      responses:
+        "200": { description: Forecast version found, content: { application/json: { schema: { $ref: "#/components/schemas/ForecastVersion" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /forecasts/{forecastVersionId}/overrides:
+    post:
+      operationId: overrideForecastVersion
+      tags: [Forecasts]
+      summary: Create an immutable manual child version
+      description: Copies the latest version, replaces only supplied intervals and preserves the original.
+      parameters:
+        - $ref: "#/components/parameters/ForecastVersionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForecastOverrideRequest" }
+      responses:
+        "201": { description: Override version created, content: { application/json: { schema: { $ref: "#/components/schemas/ForecastVersion" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /schedules:
+    get:
+      operationId: listSchedules
+      tags: [Schedules]
+      summary: List tenant-scoped schedule outcomes
+      description: Returns validated candidates and explicit infeasible attempts, optionally filtered by portfolio.
+      parameters:
+        - { name: portfolioId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: Schedule outcomes
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Schedule" } } } }
+    post:
+      operationId: createSchedule
+      tags: [Schedules]
+      summary: Generate and hard-constraint-validate an immutable candidate schedule
+      description: Returns a terminal VALIDATED candidate or an explicit INFEASIBLE result without a version.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScheduleRequest"
+      responses:
+        "202":
+          description: Schedule generation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleDetail"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /schedules/{scheduleId}:
+    get:
+      operationId: getSchedule
+      tags: [Schedules]
+      summary: Get one terminal schedule outcome and immutable version
+      description: Returns the frozen input evidence, result summary, interval series and device targets when feasible.
+      parameters:
+        - $ref: "#/components/parameters/ScheduleId"
+      responses:
+        "200":
+          description: Schedule found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleDetail"
+        "404": { $ref: "#/components/responses/NotFound" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    AlarmId:
+      name: alarmId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PortfolioId:
+      name: portfolioId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ForecastRunId:
+      name: forecastRunId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ForecastVersionId:
+      name: forecastVersionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ScheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable key reused for retries of the same semantic write.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 200
+  responses:
+    Unauthorized:
+      description: Authentication is missing or invalid
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    Forbidden:
+      description: Authenticated actor lacks the required role
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    NotFound:
+      description: Object does not exist or is outside the authorized tenant scope
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    Conflict:
+      description: State or idempotency conflict
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    ValidationError:
+      description: Request or domain validation failed
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+  schemas:
+    AlarmAction:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties: { reason: { type: string, minLength: 1, maxLength: 500 } }
+    CreateAlarmRuleRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, rule_type, duration_seconds, severity, enabled]
+      properties:
+        code: { type: string, pattern: "^[a-z][a-z0-9-]*$", maxLength: 128 }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        rule_type: { type: string, enum: [OFFLINE, STALE, SOC_LOW, SOC_HIGH, POWER_LOW, POWER_HIGH, SUDDEN_CHANGE, COMMAND_TIMEOUT] }
+        device_type: { type: [string, "null"], enum: [METER, PV_INVERTER, BATTERY, EV_CHARGER, null] }
+        metric: { type: [string, "null"], maxLength: 64 }
+        threshold: { type: [number, "null"] }
+        clear_threshold: { type: [number, "null"] }
+        duration_seconds: { type: integer, minimum: 0, maximum: 86400 }
+        severity: { type: string, enum: [INFO, WARNING, MAJOR, CRITICAL] }
+        enabled: { type: boolean }
+    AlarmRule:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, rule_type, duration_seconds, severity, version, enabled, coverage_status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, pattern: "^[a-z][a-z0-9-]*$", maxLength: 128 }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        rule_type: { type: string, enum: [OFFLINE, STALE, SOC_LOW, SOC_HIGH, POWER_LOW, POWER_HIGH, SUDDEN_CHANGE, COMMAND_TIMEOUT] }
+        device_type: { type: [string, "null"], enum: [METER, PV_INVERTER, BATTERY, EV_CHARGER, null] }
+        metric: { type: [string, "null"], maxLength: 64 }
+        threshold: { type: [number, "null"] }
+        clear_threshold: { type: [number, "null"] }
+        duration_seconds: { type: integer, minimum: 0, maximum: 86400 }
+        severity: { type: string, enum: [INFO, WARNING, MAJOR, CRITICAL] }
+        version: { type: integer, minimum: 1 }
+        enabled: { type: boolean }
+        coverage_status: { type: string, enum: [ACTIVE, UNSUPPORTED] }
+        created_at: { type: string, format: date-time }
+    Alarm:
+      type: object
+      additionalProperties: false
+      required: [id, rule_id, rule_code, rule_name, object_type, object_id, object_name, external_code, portfolio_id, site_id, state, severity, first_occurred_at, last_occurred_at, occurrence_count, evidence]
+      properties:
+        id: { type: string, format: uuid }
+        rule_id: { type: string, format: uuid }
+        rule_code: { type: string }
+        rule_name: { type: string }
+        object_type: { const: DEVICE }
+        object_id: { type: string, format: uuid }
+        object_name: { type: string }
+        external_code: { type: string }
+        portfolio_id: { type: string, format: uuid }
+        site_id: { type: string, format: uuid }
+        state: { type: string, enum: [OPEN, ACKNOWLEDGED, RECOVERED, CLOSED] }
+        severity: { type: string, enum: [INFO, WARNING, MAJOR, CRITICAL] }
+        first_occurred_at: { type: string, format: date-time }
+        last_occurred_at: { type: string, format: date-time }
+        occurrence_count: { type: integer, minimum: 1 }
+        acknowledged_at: { type: [string, "null"], format: date-time }
+        acknowledged_by: { type: [string, "null"] }
+        recovered_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        evidence: { type: object, additionalProperties: true }
+    AlarmTransition:
+      type: object
+      additionalProperties: false
+      required: [id, event_type, to_state, evidence, occurred_at]
+      properties:
+        id: { type: string, format: uuid }
+        event_type: { type: string }
+        from_state: { type: [string, "null"] }
+        to_state: { type: string }
+        actor_id: { type: [string, "null"] }
+        reason: { type: [string, "null"] }
+        evidence: { type: object, additionalProperties: true }
+        occurred_at: { type: string, format: date-time }
+    AlarmDetail:
+      type: object
+      additionalProperties: false
+      required: [alarm, timeline]
+      properties:
+        alarm: { $ref: "#/components/schemas/Alarm" }
+        timeline: { type: array, items: { $ref: "#/components/schemas/AlarmTransition" } }
+    AlarmCoverage:
+      type: object
+      additionalProperties: false
+      required: [enabled_rules, evaluated_rules, unsupported_rules, status]
+      properties:
+        enabled_rules: { type: integer, minimum: 0 }
+        evaluated_rules: { type: integer, minimum: 0 }
+        unsupported_rules: { type: array, items: { type: string } }
+        status: { type: string, enum: [FULL, PARTIAL] }
+    CreatePortfolioRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+    Portfolio:
+      type: object
+      additionalProperties: false
+      required: [id, name, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        created_at: { type: string, format: date-time }
+    CreateSiteRequest:
+      type: object
+      additionalProperties: false
+      required: [portfolio_id, name, timezone, grid_connection_limit_kw]
+      properties:
+        portfolio_id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        timezone: { type: string, minLength: 1, maxLength: 80 }
+        grid_connection_limit_kw: { type: number, exclusiveMinimum: 0 }
+    Site:
+      type: object
+      additionalProperties: false
+      required: [id, portfolio_id, name, timezone, grid_connection_limit_kw, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        portfolio_id: { type: string, format: uuid }
+        name: { type: string }
+        timezone: { type: string }
+        grid_connection_limit_kw: { type: number }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        created_at: { type: string, format: date-time }
+    CreateDeviceModelRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type, schema_version, point_schema]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        type: { type: string, enum: [METER, PV_INVERTER, BATTERY, EV_CHARGER] }
+        schema_version: { type: integer, minimum: 1 }
+        point_schema: { type: object, minProperties: 1, additionalProperties: true }
+    DeviceModel:
+      type: object
+      additionalProperties: false
+      required: [id, name, type, schema_version, point_schema, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        schema_version: { type: integer }
+        point_schema: { type: object, additionalProperties: true }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        created_at: { type: string, format: date-time }
+    DeviceCapabilityInput:
+      type: object
+      additionalProperties: false
+      required: [capability, unit, min_value, max_value, fallback_value]
+      properties:
+        capability: { type: string, minLength: 1, maxLength: 80 }
+        unit: { type: string, minLength: 1, maxLength: 24 }
+        min_value: { type: number }
+        max_value: { type: number }
+        fallback_value: { type: number }
+    DeviceCapability:
+      allOf:
+        - $ref: "#/components/schemas/DeviceCapabilityInput"
+        - type: object
+          required: [config_version]
+          properties:
+            config_version: { type: integer, minimum: 1 }
+    CreateDeviceRequest:
+      type: object
+      additionalProperties: false
+      required: [site_id, model_id, external_code, name, capabilities]
+      properties:
+        site_id: { type: string, format: uuid }
+        model_id: { type: string, format: uuid }
+        external_code: { type: string, pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$" }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        capabilities:
+          type: array
+          maxItems: 32
+          items: { $ref: "#/components/schemas/DeviceCapabilityInput" }
+    Device:
+      type: object
+      additionalProperties: false
+      required: [id, site_id, model_id, external_code, name, status, config_version, credential_configured, capabilities, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        site_id: { type: string, format: uuid }
+        model_id: { type: string, format: uuid }
+        external_code: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [PENDING, ACTIVE, MAINTENANCE, DISABLED, SAFETY_LOCKED] }
+        config_version: { type: integer, minimum: 1 }
+        credential_configured: { type: boolean }
+        capabilities:
+          type: array
+          items: { $ref: "#/components/schemas/DeviceCapability" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    UpdateDeviceStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status: { type: string, enum: [ACTIVE, MAINTENANCE, DISABLED, SAFETY_LOCKED] }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    RotateCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [credential, reason]
+      properties:
+        credential: { type: string, minLength: 16, maxLength: 512, writeOnly: true }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CredentialReference:
+      type: object
+      additionalProperties: false
+      required: [id, device_id, status, rotated_at]
+      properties:
+        id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+        status: { type: string, enum: [ACTIVE, REVOKED] }
+        rotated_at: { type: string, format: date-time }
+    TariffIntervalInput:
+      type: object
+      additionalProperties: false
+      required: [start, end, price_per_kwh]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        price_per_kwh: { type: number, minimum: 0 }
+    CreateTariffPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [name, currency, timezone, version, valid_from, valid_to, intervals]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        timezone: { type: string, minLength: 1, maxLength: 80 }
+        version: { type: integer, minimum: 1 }
+        valid_from: { type: string, format: date-time }
+        valid_to: { type: string, format: date-time }
+        intervals:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items: { $ref: "#/components/schemas/TariffIntervalInput" }
+    TariffPlan:
+      type: object
+      additionalProperties: false
+      required: [id, name, currency, timezone, version, valid_from, valid_to, interval_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        currency: { type: string }
+        timezone: { type: string }
+        version: { type: integer }
+        valid_from: { type: string, format: date-time }
+        valid_to: { type: string, format: date-time }
+        interval_count: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required: [id, actor_id, action, object_type, object_id, result, occurred_at]
+      properties:
+        id: { type: string, format: uuid }
+        actor_id: { type: string }
+        action: { type: string }
+        object_type: { type: string }
+        object_id: { type: string }
+        reason: { type: [string, "null"] }
+        before_digest: { type: [string, "null"] }
+        after_digest: { type: [string, "null"] }
+        result: { type: string, enum: [SUCCEEDED, FAILED, DENIED] }
+        occurred_at: { type: string, format: date-time }
+    InternalDeviceIdentity:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, device_id, credential_verifier, config_version]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        device_id: { type: string }
+        credential_verifier: { type: string, pattern: "^hmac-sha256\\$[A-Za-z0-9+/=]+$" }
+        config_version: { type: integer, minimum: 1 }
+    InternalDeviceCatalogEntry:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, device_id, external_code, site_id, portfolio_id, device_type,
+        schema_version, point_schema, device_status, config_version]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+        external_code: { type: string, minLength: 1, maxLength: 64 }
+        site_id: { type: string, format: uuid }
+        portfolio_id: { type: string, format: uuid }
+        device_type: { type: string, enum: [METER, PV_INVERTER, BATTERY, EV_CHARGER] }
+        schema_version: { type: integer, minimum: 1 }
+        point_schema: { type: object, additionalProperties: true }
+        device_status: { type: string, enum: [PENDING, ACTIVE, MAINTENANCE, DISABLED, SAFETY_LOCKED] }
+        config_version: { type: integer, minimum: 1 }
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [UP, DEGRADED]
+    PortfolioSnapshot:
+      type: object
+      additionalProperties: false
+      required: [portfolio_id, portfolio_name, observed_at, freshness_seconds, freshness_status,
+        quality, coverage, power, sites]
+      properties:
+        portfolio_id: { type: string, format: uuid }
+        portfolio_name: { type: string }
+        observed_at: { type: [string, "null"], format: date-time }
+        freshness_seconds: { type: [number, "null"], minimum: 0 }
+        freshness_status: { $ref: "#/components/schemas/FreshnessStatus" }
+        quality: { type: string, enum: [VALID, SUSPECT, UNKNOWN] }
+        coverage: { $ref: "#/components/schemas/RealtimeCoverage" }
+        power:
+          type: object
+          additionalProperties: false
+          required: [net_grid_power_kw, pv_power_kw, battery_power_kw]
+          properties:
+            net_grid_power_kw: { type: [number, "null"] }
+            pv_power_kw: { type: [number, "null"] }
+            battery_power_kw: { type: [number, "null"] }
+        sites: { type: array, items: { $ref: "#/components/schemas/SiteSnapshot" } }
+    FreshnessStatus:
+      type: string
+      enum: [LIVE, PARTIAL, STALE, EMPTY]
+    RealtimeCoverage:
+      type: object
+      additionalProperties: false
+      required: [total_devices, reporting_devices, live_devices]
+      properties:
+        total_devices: { type: integer, minimum: 0 }
+        reporting_devices: { type: integer, minimum: 0 }
+        live_devices: { type: integer, minimum: 0 }
+    SiteSnapshot:
+      type: object
+      additionalProperties: false
+      required: [site_id, site_name, timezone, freshness_status, coverage, devices]
+      properties:
+        site_id: { type: string, format: uuid }
+        site_name: { type: string }
+        timezone: { type: string }
+        freshness_status: { $ref: "#/components/schemas/FreshnessStatus" }
+        coverage: { $ref: "#/components/schemas/RealtimeCoverage" }
+        devices: { type: array, items: { $ref: "#/components/schemas/DeviceSnapshot" } }
+    DeviceSnapshot:
+      type: object
+      additionalProperties: false
+      required: [device_id, external_code, device_name, device_type, device_status,
+        freshness_status, quality, observed_at, freshness_seconds, metrics]
+      properties:
+        device_id: { type: string, format: uuid }
+        external_code: { type: string }
+        device_name: { type: string }
+        device_type: { type: string, enum: [METER, PV_INVERTER, BATTERY, EV_CHARGER] }
+        device_status: { type: string }
+        freshness_status: { $ref: "#/components/schemas/FreshnessStatus" }
+        quality: { type: string, enum: [VALID, SUSPECT, UNKNOWN] }
+        observed_at: { type: [string, "null"], format: date-time }
+        freshness_seconds: { type: [number, "null"], minimum: 0 }
+        metrics:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, value, unit]
+            properties:
+              name: { type: string }
+              value: { type: number }
+              unit: { type: string }
+    TelemetryQueryResponse:
+      type: object
+      additionalProperties: false
+      required: [target_type, target_id, metric, from, to, bucket_seconds, series]
+      properties:
+        target_type: { type: string, enum: [PORTFOLIO, SITE, DEVICE] }
+        target_id: { type: string, format: uuid }
+        metric: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        bucket_seconds: { type: integer, minimum: 1 }
+        series:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [external_code, device_type, unit, points]
+            properties:
+              external_code: { type: string }
+              device_type: { type: string }
+              unit: { type: string }
+              points:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [observed_at, value, quality]
+                  properties:
+                    observed_at: { type: string, format: date-time }
+                    value: { type: number }
+                    quality: { type: string, enum: [VALID, SUSPECT] }
+    RealtimeTicket:
+      type: object
+      additionalProperties: false
+      required: [ticket, expires_at]
+      properties:
+        ticket: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
+        expires_at: { type: string, format: date-time }
+    CreateForecastRunRequest:
+      type: object
+      additionalProperties: false
+      required: [target_type, target_id, forecast_date, metric]
+      properties:
+        target_type: { type: string, enum: [SITE, PORTFOLIO] }
+        target_id: { type: string, format: uuid }
+        forecast_date: { type: string, format: date }
+        metric: { type: string, enum: [LOAD_KW, PV_POWER_KW] }
+    ForecastRun:
+      type: object
+      additionalProperties: false
+      required: [id, status, target_type, target_id, forecast_date, timezone, metric, data_cutoff, reasons, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCEEDED, INSUFFICIENT_DATA, FAILED]
+        target_type: { type: string, enum: [SITE, PORTFOLIO] }
+        target_id: { type: string, format: uuid }
+        forecast_date: { type: string, format: date }
+        timezone: { type: string }
+        metric: { type: string, enum: [LOAD_KW, PV_POWER_KW] }
+        data_cutoff: { type: string, format: date-time }
+        failure_code: { type: [string, "null"] }
+        reasons: { type: array, items: { type: string } }
+        dataset_report: { type: [object, "null"], additionalProperties: true }
+        validation_metrics: { type: [object, "null"], additionalProperties: true }
+        forecast_version_id: { type: [string, "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+    ForecastRunDetail:
+      type: object
+      additionalProperties: false
+      required: [run, forecast]
+      properties:
+        run: { $ref: "#/components/schemas/ForecastRun" }
+        forecast:
+          oneOf:
+            - $ref: "#/components/schemas/ForecastVersion"
+            - type: "null"
+    ForecastPoint:
+      type: object
+      additionalProperties: false
+      required: [interval_start, interval_end, value, unit, quality]
+      properties:
+        interval_start: { type: string, format: date-time }
+        interval_end: { type: string, format: date-time }
+        value: { type: number }
+        unit: { type: string }
+        quality: { type: string, enum: [ESTIMATED, OVERRIDDEN] }
+    ForecastVersion:
+      type: object
+      additionalProperties: false
+      required: [id, forecast_run_id, version, source, model_name, model_version, feature_version, weather_source, data_cutoff, created_at, points]
+      properties:
+        id: { type: string, format: uuid }
+        forecast_run_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        source: { type: string, enum: [MODEL, MANUAL_OVERRIDE] }
+        model_name: { type: string }
+        model_version: { type: string }
+        feature_version: { type: string }
+        weather_source: { type: string }
+        data_cutoff: { type: string, format: date-time }
+        overridden_from_id: { type: [string, "null"], format: uuid }
+        override_reason: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        points: { type: array, items: { $ref: "#/components/schemas/ForecastPoint" } }
+    ForecastOverrideRequest:
+      type: object
+      additionalProperties: false
+      required: [reason, points]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        points:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [interval_start, value]
+            properties:
+              interval_start: { type: string, format: date-time }
+              value: { type: number, minimum: 0 }
+    CreateScheduleRequest:
+      type: object
+      additionalProperties: false
+      required: [portfolio_id, schedule_date, load_forecast_version_id, pv_forecast_version_id, tariff_plan_id, battery_states]
+      properties:
+        portfolio_id: { type: string, format: uuid }
+        schedule_date: { type: string, format: date }
+        load_forecast_version_id: { type: string, format: uuid }
+        pv_forecast_version_id: { type: string, format: uuid }
+        tariff_plan_id: { type: string, format: uuid }
+        battery_states:
+          type: array
+          maxItems: 256
+          items:
+            type: object
+            additionalProperties: false
+            required: [device_id, initial_soc_pct]
+            properties:
+              device_id: { type: string, format: uuid }
+              initial_soc_pct: { type: number, minimum: 0, maximum: 100 }
+    Schedule:
+      type: object
+      additionalProperties: false
+      required: [id, portfolio_id, schedule_date, timezone, status, feasibility, reasons, input, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [VALIDATED, FAILED]
+        feasibility: { type: string, enum: [FEASIBLE, INFEASIBLE, FAILED] }
+        portfolio_id: { type: string, format: uuid }
+        schedule_date: { type: string, format: date }
+        timezone: { type: string }
+        current_version: { type: [integer, "null"], minimum: 1 }
+        failure_code: { type: [string, "null"] }
+        reasons: { type: array, items: { type: string } }
+        input: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ScheduleDetail:
+      type: object
+      additionalProperties: false
+      required: [schedule, version]
+      properties:
+        schedule: { $ref: "#/components/schemas/Schedule" }
+        version:
+          type: [object, "null"]
+          additionalProperties: true
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message, trace_id]
+      properties:
+        code: { type: string, pattern: "^[A-Z][A-Z0-9_]+$" }
+        message: { type: string }
+        trace_id: { type: string, pattern: "^[a-f0-9]{32}$" }
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            required: [reason]
+            properties:
+              field: { type: string }
+              reason: { type: string }
+security:
+  - bearerAuth: []

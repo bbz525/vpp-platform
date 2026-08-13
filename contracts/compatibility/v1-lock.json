@@ -1,0 +1,30 @@
+{
+  "https://vpp.local/schemas/mqtt/telemetry-up.v1.schema.json": {
+    "required": ["schema_version", "event_id", "sequence", "device_time", "metrics"],
+    "types": { "event_id": "string", "sequence": "integer", "device_time": "string", "metrics": "object" }
+  },
+  "https://vpp.local/schemas/events/normalized-telemetry.v1.schema.json": {
+    "required": ["schema", "schema_version", "event_id", "event_type", "tenant_id", "aggregate_id", "occurred_at", "payload"],
+    "types": { "event_id": "string", "tenant_id": "string", "aggregate_id": "string", "payload": "object" }
+  },
+  "https://vpp.local/schemas/commands/command-requested.v1.schema.json": {
+    "required": ["command_id", "idempotency_key", "tenant_id", "device_id", "action", "parameters", "expires_at"],
+    "types": { "command_id": "string", "idempotency_key": "string", "tenant_id": "string", "device_id": "string", "action": "string", "parameters": "object" }
+  },
+  "https://vpp.local/schemas/commands/command-ack.v1.schema.json": {
+    "required": ["event_id", "command_id", "idempotency_key", "device_time", "status"],
+    "types": { "event_id": "string", "command_id": "string", "idempotency_key": "string", "device_time": "string", "status": "string" }
+  },
+  "https://vpp.local/schemas/events/alarm-event.v1.schema.json": {
+    "required": ["event_id", "alarm_id", "rule_id", "object_type", "object_id", "severity", "to_state", "occurred_at"],
+    "types": { "event_id": "string", "alarm_id": "string", "rule_id": "string", "object_id": "string", "severity": "string" }
+  },
+  "https://vpp.local/schemas/events/forecast-event.v1.schema.json": {
+    "required": ["schema_version", "event_id", "event_type", "tenant_id", "forecast_run_id", "target_type", "target_id", "forecast_date", "metric", "status", "data_cutoff", "occurred_at"],
+    "types": { "event_id": "string", "tenant_id": "string", "forecast_run_id": "string", "target_id": "string", "status": "string" }
+  },
+  "https://vpp.local/schemas/events/schedule-approved.v1.schema.json": {
+    "required": ["event_id", "schedule_id", "schedule_version", "forecast_version", "tariff_version", "algorithm_version", "approved_by", "content_sha256"],
+    "types": { "event_id": "string", "schedule_id": "string", "schedule_version": "integer", "algorithm_version": "string", "content_sha256": "string" }
+  }
+}

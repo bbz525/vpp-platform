@@ -1,0 +1,9 @@
+extends:
+  - spectral:oas
+
+rules:
+  operation-operationId: error
+  operation-tags: error
+  info-contact: off
+  oas3-api-servers: error
+

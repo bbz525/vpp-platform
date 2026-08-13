@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vpp.local/schemas/mqtt/heartbeat-up.v1.schema.json",
+  "title": "MQTT heartbeat upload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "sequence", "device_time"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "format": "uuid" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "device_time": { "type": "string", "format": "date-time" },
+    "firmware_version": { "type": "string", "maxLength": 128 },
+    "uptime_seconds": { "type": "integer", "minimum": 0 },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

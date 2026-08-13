@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "event_id": "91f650d1-a3a8-4607-bcd2-f77e5c923805",
+  "event_type": "SCHEDULE_GENERATED",
+  "tenant_id": "7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941",
+  "schedule_id": "6a171880-5ff7-4b5c-9e88-41a6ead2e44f",
+  "portfolio_id": "a7629219-cf15-4f18-bc34-99f499b41013",
+  "schedule_date": "2026-08-14",
+  "status": "VALIDATED",
+  "feasibility": "FEASIBLE",
+  "schedule_version_id": "b50f420b-a7a6-46ef-8391-728120417845",
+  "occurred_at": "2026-08-13T01:00:00Z"
+}

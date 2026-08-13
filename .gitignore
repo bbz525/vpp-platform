@@ -1,0 +1,28 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Java
+target/
+*.log
+
+# Node / Next.js
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+dist/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+

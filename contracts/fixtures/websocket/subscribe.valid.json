@@ -1,0 +1,11 @@
+{
+  "type": "subscribe",
+  "request_id": "req-1",
+  "channels": [
+    "portfolio:portfolio-001:snapshot",
+    "tenant:alarms",
+    "schedule:schedule-42:execution"
+  ],
+  "resume_after": "0000000000019234"
+}
+

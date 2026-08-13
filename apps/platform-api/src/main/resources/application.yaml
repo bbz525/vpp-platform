@@ -1,0 +1,97 @@
+spring:
+  application:
+    name: platform-api
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://127.0.0.1:5432/vpp}
+    username: ${POSTGRES_USER:vpp}
+    password: ${POSTGRES_PASSWORD:local-dev-postgres-only}
+    hikari:
+      maximum-pool-size: ${PLATFORM_DB_POOL_SIZE:10}
+      connection-timeout: 3000
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    properties:
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 5000
+        max.block.ms: 1000
+server:
+  port: ${PLATFORM_API_PORT:8080}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+      show-details: never
+
+platform:
+  environment: ${VPP_ENV:local}
+  auth:
+    mode: ${PLATFORM_AUTH_MODE:local}
+    jwt-issuer-uri: ${PLATFORM_JWT_ISSUER_URI:}
+  bootstrap:
+    enabled: ${PLATFORM_LOCAL_BOOTSTRAP_ENABLED:true}
+    tenant-id: ${PLATFORM_LOCAL_TENANT_ID:7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941}
+    tenant-name: ${PLATFORM_LOCAL_TENANT_NAME:Local VPP Demo}
+    user-id: ${PLATFORM_LOCAL_USER_ID:a4a5a8b9-7607-4d1e-ac24-a2821959e4c9}
+    subject: ${PLATFORM_LOCAL_SUBJECT:local-admin}
+  internal-token: ${PLATFORM_INTERNAL_TOKEN:local-dev-platform-internal-token-only}
+  realtime:
+    enabled: ${PLATFORM_REALTIME_ENABLED:false}
+    stale-after: ${PLATFORM_REALTIME_STALE_AFTER:15s}
+    poll-interval: ${PLATFORM_WS_POLL_INTERVAL:250ms}
+    heartbeat-interval: ${PLATFORM_WS_HEARTBEAT_INTERVAL:15s}
+    max-replay-events: ${PLATFORM_WS_MAX_REPLAY_EVENTS:100}
+    send-buffer-bytes: ${PLATFORM_WS_SEND_BUFFER_BYTES:65536}
+    send-time-limit: ${PLATFORM_WS_SEND_TIME_LIMIT:2s}
+    allowed-origins: ${PLATFORM_WEB_ALLOWED_ORIGINS:http://127.0.0.1:3000,http://localhost:3000}
+    redis-tls: ${REDIS_SSL_ENABLED:false}
+    clickhouse:
+      url: ${CLICKHOUSE_JDBC_URL:jdbc:clickhouse://127.0.0.1:8123/vpp}
+      username: ${CLICKHOUSE_USER:vpp}
+      password: ${CLICKHOUSE_PASSWORD:local-dev-clickhouse-only}
+  alarms:
+    enabled: ${PLATFORM_ALARMS_ENABLED:false}
+    evaluation-interval: ${PLATFORM_ALARM_EVALUATION_INTERVAL:5s}
+    resume-ttl: ${PLATFORM_ALARM_RESUME_TTL:24h}
+    resume-max-length: ${PLATFORM_ALARM_RESUME_MAX_LENGTH:1000}
+  forecast:
+    enabled: ${PLATFORM_FORECAST_ENABLED:false}
+    service-url: ${FORECAST_SERVICE_URL:http://127.0.0.1:8090}
+    connect-timeout: ${FORECAST_CONNECT_TIMEOUT:2s}
+    read-timeout: ${FORECAST_READ_TIMEOUT:30s}
+    minimum-history-days: ${FORECAST_MINIMUM_HISTORY_DAYS:28}
+    recent-days: ${FORECAST_RECENT_DAYS:7}
+    minimum-recent-completeness: ${FORECAST_MINIMUM_RECENT_COMPLETENESS:0.95}
+    history-lookback-days: ${FORECAST_HISTORY_LOOKBACK_DAYS:56}
+    worker-threads: ${FORECAST_WORKER_THREADS:2}
+    queue-capacity: ${FORECAST_QUEUE_CAPACITY:50}
+  schedule:
+    soc-safety-margin-pct: ${SCHEDULE_SOC_SAFETY_MARGIN_PCT:5}
+    degradation-cost-per-kwh: ${SCHEDULE_DEGRADATION_COST_PER_KWH:0.05}
+  outbox:
+    enabled: ${PLATFORM_OUTBOX_ENABLED:false}
+    poll-interval: ${PLATFORM_OUTBOX_POLL_INTERVAL:1s}
+    batch-size: ${PLATFORM_OUTBOX_BATCH_SIZE:50}
+    send-timeout: ${PLATFORM_OUTBOX_SEND_TIMEOUT:10s}

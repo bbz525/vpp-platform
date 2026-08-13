@@ -1,0 +1,14 @@
+{
+  "type": "event",
+  "channel": "portfolio:portfolio-001:snapshot",
+  "cursor": "0000000000019235",
+  "occurred_at": "2026-08-12T01:00:01.000Z",
+  "data": {
+    "net_grid_power_kw": 832.1,
+    "pv_power_kw": 540.0,
+    "battery_power_kw": 120.5,
+    "freshness_seconds": 1.2,
+    "quality": "VALID"
+  }
+}
+

@@ -1,0 +1,32 @@
+{
+  "schema": "vpp.telemetry.normalized",
+  "schema_version": 1,
+  "event_id": "0198c8d7-c8dc-7ae2-a3a1-eef5c6eddb63",
+  "event_type": "TelemetryAccepted",
+  "tenant_id": "7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941",
+  "aggregate_type": "DEVICE",
+  "aggregate_id": "bess-001",
+  "occurred_at": "2026-08-12T01:00:00.000Z",
+  "produced_at": "2026-08-12T01:00:00.120Z",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlation_id": "0198c8d7-c8dc-7ae2-a3a1-eef5c6eddb63",
+  "causation_id": null,
+  "producer": "telemetry-normalizer",
+  "data_quality": {
+    "status": "VALID",
+    "flags": ["SIMULATED_SOURCE"],
+    "source": "SIMULATED"
+  },
+  "payload": {
+    "site_id": "site-sh-001",
+    "device_type": "BATTERY",
+    "sequence": 48121,
+    "ingested_at": "2026-08-12T01:00:00.080Z",
+    "metrics": {
+      "active_power_kw": 120.5,
+      "soc_pct": 63.2,
+      "available_capacity_kwh": 452.8
+    }
+  }
+}
+

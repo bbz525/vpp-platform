@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: device-simulator
+server:
+  port: ${DEVICE_SIMULATOR_PORT:8083}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+      show-details: never
+
+simulator:
+  enabled: ${SIMULATOR_ENABLED:false}
+  seed: ${SIMULATOR_SEED:20260812}
+  tenant-id: ${SIMULATOR_TENANT_ID:7fdc2ef7-3b7d-4a43-a37c-63cc4b36a941}
+  device-count: ${SIMULATOR_DEVICE_COUNT:4}
+  scenario: ${SIMULATOR_SCENARIO:SUNNY_WEEKDAY}
+  start-time: ${SIMULATOR_START_TIME:2026-08-12T00:00:00Z}
+  tick-interval: ${SIMULATOR_TICK_INTERVAL:5s}
+  heartbeat-interval: ${SIMULATOR_HEARTBEAT_INTERVAL:15s}
+  max-ticks: ${SIMULATOR_MAX_TICKS:0}
+  protocol: ${SIMULATOR_PROTOCOL:MQTT}
+  mqtt:
+    host: ${MQTT_HOST:127.0.0.1}
+    port: ${MQTT_PORT:1883}
+    connect-timeout: ${MQTT_CONNECT_TIMEOUT:5s}
+  tcp:
+    host: ${IOT_GATEWAY_TCP_HOST:127.0.0.1}
+    port: ${IOT_GATEWAY_TCP_PORT:18081}
+    tls: ${IOT_GATEWAY_TCP_TLS:true}
+    insecure-trust-all: ${IOT_GATEWAY_TCP_INSECURE_TRUST_ALL:false}
+    credential: ${SIMULATOR_TCP_CREDENTIAL:}
+    connect-timeout: ${IOT_GATEWAY_TCP_CONNECT_TIMEOUT:5s}
+  fault:
+    type: ${SIMULATOR_FAULT_TYPE:NONE}
+    every-nth-tick: ${SIMULATOR_FAULT_EVERY_NTH_TICK:0}
+    target-device-index: ${SIMULATOR_FAULT_TARGET_DEVICE_INDEX:0}
+    clock-drift: ${SIMULATOR_FAULT_CLOCK_DRIFT:5m}
